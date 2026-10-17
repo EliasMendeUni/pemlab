@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "pemlab"
 dynamic = ["version"]
-description = "Hilfswerkzeuge für Messdatenanalyse und Protokolle in der Physikalischen und Elektronischen Messtechnik"
+description = "Tools for measurement data analysis and lab reports in physical and electronic measurement technology"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Elias Mende" }]
-keywords = ["Messtechnik", "Messdaten", "Protokoll", "Physik"]
+keywords = ["measurement", "data analysis", "lab report", "physics", "latex"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
@@ -20,6 +20,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "pandas",
+    "scipy",
     "matplotlib",
 ]
 

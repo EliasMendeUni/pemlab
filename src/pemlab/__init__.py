@@ -1,7 +1,9 @@
-"""pemlab – Werkzeuge für Messdatenanalyse und Protokolle."""
+"""pemlab: tools for measurement data analysis and lab reports."""
 
-from pemlab.tables import csv_to_tex
+from pemlab.analysis.fit import LinearFit
+from pemlab.graphics.plot import FitPlot
+from pemlab.tex.tables import Table
 
 __version__ = "0.1.0"
 
-__all__ = ["csv_to_tex"]
+__all__ = ["FitPlot", "LinearFit", "Table"]
