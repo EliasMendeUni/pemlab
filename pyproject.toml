@@ -23,6 +23,7 @@ dependencies = [
     "pandas",
     "matplotlib",
     "scipy",
+    "sympy",
     "csvtex",
 ]
 

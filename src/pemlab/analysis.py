@@ -1,73 +1,72 @@
-import inspect
-import re
+"""Analysis of csv data: plots and regressions that end up in the build folder."""
+
+from collections.abc import Callable
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from scipy.optimize import curve_fit
+from pemlab.artifacts import Artifact, PlotArtifact
+from pemlab.calculation import collect_calculations
+from pemlab.data import EditCsv, PlotData
+from pemlab.fit import FitResult, fit_function
+from pemlab.formulas import column_symbol, fit_expression_latex, fit_expression_text
+from pemlab.latex import calculations_section_to_tex, fit_formula_to_tex, fit_result_to_tex
+from pemlab.plotting import make_data_figure, make_fit_figure
 
-from pemlab.data import PlotData, get_csv_data
 
-def _function_expression(function, x_name: str) -> str:
-    """Return the expression after `return` with the x argument replaced by x_name."""
-    try:
-        lines = inspect.getsource(function).splitlines()
-    except (OSError, TypeError):
-        return function.__name__
-    x_arg = next(iter(inspect.signature(function).parameters))
-    for line in reversed(lines):
-        line = line.strip()
-        if line.startswith("return "):
-            expression = line.removeprefix("return ")
-            return re.sub(rf"\b{re.escape(x_arg)}\b", lambda _: x_name, expression)
-    return function.__name__
+def _used_columns(data: PlotData) -> list[str]:
+    columns = [data.x[0], data.y[0]]
+    if data.y_sigma is not None:
+        columns.append(data.y_sigma[0])
+    return columns
+
+
+def _default_caption(data: PlotData) -> str:
+    return f"{data.y[0]} gegen {data.x[0]}"
+
+
+def _fit_section(function, data: PlotData, result: FitResult) -> str:
+    x_symbol = column_symbol(data.x[0])
+    y_symbol = column_symbol(data.y[0])
+    formula_tex = fit_formula_to_tex(
+        y_symbol, fit_expression_latex(function, x_symbol), fit_expression_text(function, x_symbol)
+    )
+    return fit_result_to_tex(result, formula_tex)
+
 
 class Analysis:
-    def __init__(self, file: str | Path):
-        self.csv_data = get_csv_data(file)
+    """Plots and fits for one csv table (a path or an EditCsv)."""
 
-    def make_PlotData(self, x_index: int, y_index: int, y_sigma_index: int) -> PlotData:
-        return PlotData(self.csv_data[x_index], self.csv_data[y_index], self.csv_data[y_sigma_index])
-        
-    def plot_data(self, data: PlotData):
-        fig, ax = plt.subplots()
-        ax.plot(data.x[1], data.y[1], "o")
-        ax.set_xlabel(data.x[0])
-        ax.set_ylabel(data.y[0])
-        ax.grid(True)
-        plt.show()
+    def __init__(
+        self,
+        source: str | Path | EditCsv,
+        register: Callable[[Artifact], None] | None = None,
+    ):
+        self.table = source if isinstance(source, EditCsv) else EditCsv(source)
+        self._register = register
 
-    def plot_regression(self, function, data: PlotData, p0=None):
-        x_name, x = data.x
-        y_name, y = data.y
-        _, y_sigma = data.y_sigma
+    def make_PlotData(self, x: str, y: str, y_sigma: str | None = None) -> PlotData:
+        """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]")."""
+        sigma = None if y_sigma is None else (y_sigma, self.table.column(y_sigma))
+        return PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
 
-        # Parameternamen aus der Funktionssignatur (alles nach dem ersten Argument)
-        names = list(inspect.signature(function).parameters)[1:]
-        if p0 is None:
-            p0 = np.ones(len(names))
+    def plot_data(self, name: str, data: PlotData, caption: str | None = None) -> None:
+        self._add_plot(name, make_data_figure(data), data, caption, sections=[])
 
-        popt, pcov = curve_fit(function, x, y, p0=p0, sigma=y_sigma, absolute_sigma=True)
-        perr = np.sqrt(np.diag(pcov))
+    def regression(
+        self, name: str, function, data: PlotData, p0=None, caption: str | None = None
+    ) -> FitResult:
+        """Fit `function(x, *parameters)` to the data and add the plot with the results."""
+        sigma = None if data.y_sigma is None else data.y_sigma[1]
+        result = fit_function(function, data.x[1], data.y[1], sigma, p0)
+        print(result.summary())
 
-        for name, value, err in zip(names, popt, perr):
-            print(f"{name} = {value:.4g} ± {err:.2g}")
+        formula_text = fit_expression_text(function, data.x[0])
+        figure = make_fit_figure(data, function, result, formula_text)
+        self._add_plot(name, figure, data, caption, [_fit_section(function, data, result)])
+        return result
 
-        chi2 = np.sum(((y - function(x, *popt)) / y_sigma) ** 2)
-        dof = len(x) - len(popt)
-        if dof > 0:
-            print(f"chi²/ndf = {chi2:.3g}/{dof} = {chi2 / dof:.3g}")
-
-        fig, ax = plt.subplots()
-        ax.errorbar(x, y, yerr=y_sigma, fmt="o", capsize=3, label="Messdaten")
-        xs = np.linspace(x.min(), x.max(), 200)
-        params = ", ".join(f"{n}={v:.3g}" for n, v in zip(names, popt))
-        fit_label = f"Fit: {y_name} = {_function_expression(function, x_name)}\n{params}"
-        ax.plot(xs, function(xs, *popt), label=fit_label)
-        ax.set_xlabel(x_name)
-        ax.set_ylabel(y_name)
-        ax.legend()
-        ax.grid(True)
-        plt.show()
-        return popt, perr
+    def _add_plot(self, name, figure, data: PlotData, caption, sections: list[str]) -> None:
+        calculations = collect_calculations(self.table.calculations, _used_columns(data))
+        sections = [*sections, calculations_section_to_tex(calculations)]
+        artifact = PlotArtifact(name, figure, caption or _default_caption(data), sections)
+        if self._register is not None:
+            self._register(artifact)
