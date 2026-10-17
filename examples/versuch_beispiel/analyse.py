@@ -6,9 +6,9 @@ Output goes to ./build; include it in LaTeX with ``\input{build/...}``.
 
 from pemlab import Analysis
 
-resistor = Analysis("data/iv_messdaten.csv")
-resistor.make_data(0,1,2)
-resistor.plot_data()
+resistor = Analysis("examples/versuch_beispiel/data/iv_messdaten.csv")
+plot_data = resistor.make_data(0,1,2)
+resistor.plot_data(plot_data)
 
 
 
