@@ -18,10 +18,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
+    "pathlin",
     "numpy",
     "pandas",
-    "scipy",
     "matplotlib",
+    "scipy",
 ]
 
 [project.optional-dependencies]
