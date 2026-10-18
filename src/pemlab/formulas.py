@@ -13,9 +13,40 @@ _FUNCTION_NAMES = {
 }
 
 
+_UNIT_PATTERN = re.compile(r"^(.*?)\s*\[(.*)\]\s*$")
+_UNIT_ALIASES = {"Ohm": r"\Omega", "ohm": r"\Omega"}
+
+
+def split_unit(column: str) -> tuple[str, str | None]:
+    """'U [V]' -> ('U', 'V'); a name without brackets has no unit."""
+    match = _UNIT_PATTERN.match(column)
+    if match is None:
+        return column.strip(), None
+    return match.group(1).strip(), match.group(2).strip()
+
+
+def normalize_unit(unit: str) -> str:
+    """'Ohm' -> '\\Omega'; other units unchanged."""
+    return _UNIT_ALIASES.get(unit, unit)
+
+
 def column_symbol(column: str) -> str:
-    """Column name without unit: 'U [V]' -> 'U'."""
-    return re.sub(r"\s*\[[^\]]*\]\s*$", "", column).strip()
+    """Name used in formulas: no unit, no math markup. '$R_i$ [\\Omega]' -> 'R_i'."""
+    base, _ = split_unit(column)
+    return re.sub(r"[$\\{}]", "", base)
+
+
+def symbol_latex(name: str) -> str:
+    """'U_L' -> 'U_{L}', 'I_eff_mA' -> 'I_{eff,mA}', 'sigma_U_L' -> '\\sigma_{U_{L}}'."""
+    base, _, subscript = name.partition("_")
+    if base == "sigma" and subscript:
+        return rf"\sigma_{{{symbol_latex(subscript)}}}"
+    latex = sympy.latex(sympy.Symbol(base))
+    return f"{latex}_{{{subscript.replace('_', ',')}}}" if subscript else latex
+
+
+def rename_symbol(expression: sympy.Expr, old: str, new: str) -> sympy.Expr:
+    return expression.subs(sympy.Symbol(old), sympy.Symbol(new))
 
 
 def formula_names(text: str) -> list[str]:
@@ -51,7 +82,8 @@ def evaluate(expression: sympy.Expr, values: dict[str, np.ndarray | float]):
 
 
 def to_latex(expression: sympy.Expr) -> str:
-    return sympy.latex(expression, mul_symbol="dot")
+    names = {symbol: symbol_latex(str(symbol)) for symbol in expression.free_symbols}
+    return sympy.latex(expression, mul_symbol="dot", symbol_names=names)
 
 
 def _first_argument(function) -> str:
@@ -86,7 +118,7 @@ def fit_expression_text(function, x_name: str) -> str:
 def fit_expression_latex(function, x_symbol: str) -> str | None:
     """Expression of a fit function as LaTeX, None if it cannot be parsed."""
     expression = _return_expression(function)
-    if expression is None:
+    if expression is None or not x_symbol.isidentifier():
         return None
     text = _rename_argument(expression.replace("np.", ""), _first_argument(function), x_symbol)
     try:

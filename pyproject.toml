@@ -18,7 +18,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
-    "pathlib",
     "numpy",
     "pandas",
     "matplotlib",
@@ -29,6 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff"]
+docs = ["sphinx", "furo", "myst-nb"]
 
 [tool.hatch.version]
 path = "src/pemlab/__init__.py"

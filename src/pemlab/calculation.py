@@ -44,11 +44,13 @@ def collect_calculations(calculations: list[Calculation], columns: list[str]) ->
     """Calculations that produced `columns`, including their inputs, dependencies first."""
     by_column = {c.column: c for c in calculations}
     ordered: list[Calculation] = []
+    visited: set[str] = set()  # also stops a column that was recomputed from itself
 
     def visit(column: str) -> None:
         calculation = by_column.get(column)
-        if calculation is None or calculation in ordered:
+        if calculation is None or column in visited:
             return
+        visited.add(column)
         for dependency in calculation.dependencies:
             visit(dependency)
         ordered.append(calculation)

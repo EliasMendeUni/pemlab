@@ -76,6 +76,6 @@ class Project:
         self._reset_build_folder()
         for artifact in self._artifacts.values():
             folder = self.build_folder / artifact.kind / artifact.name
-            folder.mkdir(parents=True)
+            folder.mkdir(parents=True, exist_ok=True)  # a LaTeX auto-build may have made it
             tex_folder = f"{self.tex_prefix}/{artifact.kind}/{artifact.name}"
             artifact.write(folder, tex_folder)

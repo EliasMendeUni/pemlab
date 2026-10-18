@@ -7,6 +7,7 @@ from matplotlib.figure import Figure
 
 from pemlab.data import PlotData
 from pemlab.fit import FitResult
+from pemlab.formulas import normalize_unit, split_unit
 
 
 def _draw_measurements(ax: Axes, data: PlotData) -> None:
@@ -18,9 +19,22 @@ def _draw_measurements(ax: Axes, data: PlotData) -> None:
         ax.errorbar(x, y, yerr=data.y_sigma[1], fmt="o", capsize=3, label="Messdaten")
 
 
+def _mathtext(text: str) -> str:
+    """'\\Omega' (without dollar signs) becomes math text; '$R_i$' is already math."""
+    return f"${text}$" if "\\" in text and "$" not in text else text
+
+
+def name_to_mathtext(name: str) -> str:
+    """Column name as matplotlib label: '$R_i$ [\\Omega]' renders as R_i [Ω]."""
+    base, unit = split_unit(name)
+    if unit is None:
+        return _mathtext(base)
+    return f"{_mathtext(base)} [{_mathtext(normalize_unit(unit))}]"
+
+
 def _label_axes(ax: Axes, data: PlotData) -> None:
-    ax.set_xlabel(data.x[0])
-    ax.set_ylabel(data.y[0])
+    ax.set_xlabel(name_to_mathtext(data.x[0]))
+    ax.set_ylabel(name_to_mathtext(data.y[0]))
     ax.grid(True)
 
 
@@ -37,7 +51,7 @@ def make_fit_figure(data: PlotData, function, result: FitResult, formula_text: s
 
     x = data.x[1]
     xs = np.linspace(x.min(), x.max(), 200)
-    label = f"Fit: {data.y[0]} = {formula_text}\n{result.parameters_text()}"
+    label = f"Fit: {name_to_mathtext(data.y[0])} = {formula_text}\n{result.parameters_text()}"
     ax.plot(xs, function(xs, *result.values), label=label)
 
     _label_axes(ax, data)

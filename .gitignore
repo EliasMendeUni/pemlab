@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 venv/
 build/
+_build/
+pemlab_build/
 dist/
 *.egg-info/
 .ruff_cache/

@@ -8,8 +8,13 @@ from pemlab.calculation import collect_calculations
 from pemlab.data import EditCsv, PlotData
 from pemlab.fit import FitResult, fit_function
 from pemlab.formulas import column_symbol, fit_expression_latex, fit_expression_text
-from pemlab.latex import calculations_section_to_tex, fit_formula_to_tex, fit_result_to_tex
-from pemlab.plotting import make_data_figure, make_fit_figure
+from pemlab.latex import (
+    calculations_section_to_tex,
+    fit_formula_to_tex,
+    fit_result_to_tex,
+    name_to_tex,
+)
+from pemlab.plotting import make_data_figure, make_fit_figure, name_to_mathtext
 
 
 def _used_columns(data: PlotData) -> list[str]:
@@ -20,14 +25,13 @@ def _used_columns(data: PlotData) -> list[str]:
 
 
 def _default_caption(data: PlotData) -> str:
-    return f"{data.y[0]} gegen {data.x[0]}"
+    return f"{name_to_tex(data.y[0])} vs. {name_to_tex(data.x[0])}"
 
 
 def _fit_section(function, data: PlotData, result: FitResult) -> str:
     x_symbol = column_symbol(data.x[0])
-    y_symbol = column_symbol(data.y[0])
     formula_tex = fit_formula_to_tex(
-        y_symbol, fit_expression_latex(function, x_symbol), fit_expression_text(function, x_symbol)
+        data.y[0], fit_expression_latex(function, x_symbol), fit_expression_text(function, x_symbol)
     )
     return fit_result_to_tex(result, formula_tex)
 
@@ -49,7 +53,7 @@ class Analysis:
         return PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
 
     def plot_data(self, name: str, data: PlotData, caption: str | None = None) -> None:
-        self._add_plot(name, make_data_figure(data), data, caption, sections=[])
+        self._add_plot(name, make_data_figure(data), data, caption, notes=[])
 
     def regression(
         self, name: str, function, data: PlotData, p0=None, caption: str | None = None
@@ -59,14 +63,14 @@ class Analysis:
         result = fit_function(function, data.x[1], data.y[1], sigma, p0)
         print(result.summary())
 
-        formula_text = fit_expression_text(function, data.x[0])
+        formula_text = fit_expression_text(function, name_to_mathtext(data.x[0]))
         figure = make_fit_figure(data, function, result, formula_text)
         self._add_plot(name, figure, data, caption, [_fit_section(function, data, result)])
         return result
 
-    def _add_plot(self, name, figure, data: PlotData, caption, sections: list[str]) -> None:
+    def _add_plot(self, name, figure, data: PlotData, caption, notes: list[str]) -> None:
         calculations = collect_calculations(self.table.calculations, _used_columns(data))
-        sections = [*sections, calculations_section_to_tex(calculations)]
-        artifact = PlotArtifact(name, figure, caption or _default_caption(data), sections)
+        notes = [*notes, calculations_section_to_tex(calculations)]
+        artifact = PlotArtifact(name, figure, caption or _default_caption(data), notes)
         if self._register is not None:
             self._register(artifact)

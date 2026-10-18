@@ -6,7 +6,7 @@ from typing import Protocol
 from matplotlib.figure import Figure
 
 from pemlab.data import table_tex
-from pemlab.latex import plot_page_to_tex
+from pemlab.latex import escape_latex, figure_float_to_tex
 
 
 class Artifact(Protocol):
@@ -21,19 +21,19 @@ class Artifact(Protocol):
 class PlotArtifact:
     kind = "plots"
 
-    def __init__(self, name: str, figure: Figure, caption: str, sections: list[str]):
+    def __init__(self, name: str, figure: Figure, caption: str, notes: list[str]):
         self.name = name
         self.figure = figure
-        self.caption = caption
-        self.sections = sections
+        self.caption = caption  # LaTeX
+        self.notes = notes
 
     def write(self, folder: Path, tex_folder: str) -> None:
-        self.figure.savefig(folder / "plot.pdf")
-        self.figure.savefig(folder / "plot.png", dpi=200)
-        tex = plot_page_to_tex(
-            f"{tex_folder}/plot.pdf", self.caption, f"fig:{self.name}", self.sections
+        self.figure.savefig(folder / f"{self.name}.pdf")
+        self.figure.savefig(folder / f"{self.name}.png", dpi=200)
+        tex = figure_float_to_tex(
+            f"{tex_folder}/{self.name}.pdf", self.caption, f"fig:{self.name}", self.notes
         )
-        (folder / "plot.tex").write_text(tex, encoding="utf-8")
+        (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")
 
 
 class TableArtifact:
@@ -44,5 +44,6 @@ class TableArtifact:
         self.csv_file = Path(csv_file)
 
     def write(self, folder: Path, tex_folder: str) -> None:
-        table = table_tex(self.csv_file, self.name)
-        (folder / f"{self.name}.tex").write_text(table + "\n", encoding="utf-8")
+        caption = escape_latex(f"{self.name} (raw data)")
+        table = table_tex(self.csv_file, caption, f"tab:{self.name}_raw")
+        (folder / f"{self.name}.tex").write_text(table, encoding="utf-8")

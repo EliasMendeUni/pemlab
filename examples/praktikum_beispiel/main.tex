@@ -1,0 +1,25 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{float}  % damit Tabellen und Plots genau dort stehen, wo sie eingebunden werden
+
+\begin{document}
+
+\section{Ohmscher Widerstand}
+% bearbeitete Messdaten mit den Berechnungen der neuen Spalten
+\input{_build/data/widerstand/widerstand}
+% Plot mit Regression, Parametern und Berechnungen
+\input{_build/plots/ohmsches_gesetz/ohmsches_gesetz}
+
+\section{RC-Tiefpass}
+\input{_build/data/tiefpass/tiefpass}
+\input{_build/plots/tiefpass_gain/tiefpass_gain}
+
+\section{Rohdaten}
+% Tabellen der unbearbeiteten CSV-Dateien
+\input{_build/tables/widerstand/widerstand}
+\input{_build/tables/tiefpass/tiefpass}
+
+\end{document}

@@ -1,5 +1,6 @@
 """Csv data: reading, editing with documented calculations, LaTeX tables."""
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,9 +20,25 @@ from pemlab.formulas import (
     input_symbols,
     parse_formula,
     propagate_uncertainty,
+    rename_symbol,
+    split_unit,
     to_latex,
 )
-from pemlab.latex import calculations_section_to_tex
+from pemlab.latex import calculations_section_to_tex, escape_latex, table_float_to_tex
+
+
+def _rounded(values, decimals: int | None):
+    return values if decimals is None else np.round(values, decimals)
+
+
+def _distinguish_old_symbol(expression, old_name: str, new_name: str):
+    """Display only: if a column keeps its symbol (I [mA] -> I [A]), the old one shows as I_mA."""
+    symbol = column_symbol(old_name)
+    if symbol != column_symbol(new_name):
+        return expression
+    unit = split_unit(old_name)[1]
+    suffix = re.sub(r"\W", "", unit or "") or "old"
+    return rename_symbol(expression, symbol, f"{symbol}_{suffix}")
 
 
 @dataclass
@@ -36,9 +53,12 @@ def get_csv_data(file: str | Path) -> list[tuple[str, np.ndarray]]:
     return [(c, df[c].to_numpy()) for c in df.columns]
 
 
-def table_tex(csv_file: str | Path, name: str) -> str:
-    """LaTeX table of a csv file (caption and label from `name`)."""
-    return create_latex_table(Path(csv_file), caption=name, label=f"tab:{name}")
+def table_tex(
+    csv_file: str | Path, caption: str, label: str, notes: list[str] | None = None
+) -> str:
+    """LaTeX table of a csv file with `caption` (LaTeX) and `label`; notes stay in the float."""
+    df = pd.read_csv(Path(csv_file), dtype=str, keep_default_na=False)  # keep the written digits
+    return table_float_to_tex(list(df.columns), df.values.tolist(), caption, label, notes or [])
 
 
 class LatexConverter:
@@ -86,6 +106,13 @@ class EditCsv:
         self.df = pd.read_csv(file)
         self.calculations = load_calculations(calculations_path(file))
 
+    def __repr__(self) -> str:
+        return f"EditCsv({self.name!r}, columns={list(self.df.columns)})"
+
+    def _repr_html_(self) -> str:
+        """Notebooks show the table after every step, e.g. after add_column(...)."""
+        return self.df._repr_html_()
+
     def column(self, name: str) -> np.ndarray:
         return self.df[name].to_numpy(dtype=float)
 
@@ -96,8 +123,31 @@ class EditCsv:
         """
         expression = parse_formula(formula)
         inputs = self._input_columns(expression)
-        self._store_column(name, evaluate(expression, self._input_values(inputs)), decimals)
+        values = evaluate(expression, self._input_values(inputs))
+        self.df[name] = _rounded(values, decimals)
         self._record(Calculation(name, "column", formula, inputs, {}, to_latex(expression)))
+        return self
+
+    def replace_column(
+        self, old_name: str, new_name: str, formula: str, decimals: int | None = None
+    ) -> "EditCsv":
+        """Change a column in place (same position, no new column; the raw csv is untouched).
+
+        E.g. replace_column("I [mA]", "I [A]", "I * 1e-3"): in the formula, I is the old column.
+        """
+        if old_name not in self.df.columns:
+            columns = list(self.df.columns)
+            raise ValueError(f"Spalte '{old_name}' gibt es nicht. Vorhanden: {columns}")
+        expression = parse_formula(formula)
+        inputs = self._input_columns(expression)
+        values = _rounded(evaluate(expression, self._input_values(inputs)), decimals)
+
+        position = self.df.columns.get_loc(old_name)
+        self.df = self.df.drop(columns=old_name)
+        self.df.insert(position, new_name, values)
+
+        shown = _distinguish_old_symbol(expression, old_name, new_name)
+        self._record(Calculation(new_name, "column", formula, inputs, {}, to_latex(shown)))
         return self
 
     def add_uncertainty(
@@ -121,7 +171,7 @@ class EditCsv:
 
         values = self._input_values(inputs)
         values.update(self._sigma_values(sigma_sources))
-        self._store_column(name, evaluate(propagated, values), decimals)
+        self.df[name] = _rounded(evaluate(propagated, values), decimals)
         self._record(
             Calculation(name, "uncertainty", formula, inputs, sigma_sources, to_latex(propagated))
         )
@@ -138,7 +188,8 @@ class EditCsv:
         by_symbol = self._columns_by_symbol()
         missing = [s for s in input_symbols(expression) if s not in by_symbol]
         if missing:
-            raise ValueError(f"Keine Spalte für {missing}. Vorhandene Symbole: {sorted(by_symbol)}")
+            known = sorted(by_symbol)
+            raise ValueError(f"Keine Spalte für {missing}. Vorhandene Symbole: {known}")
         return {symbol: by_symbol[symbol] for symbol in input_symbols(expression)}
 
     def _sigma_source(self, symbol: str, given: dict[str, str | float]) -> str | float:
@@ -161,9 +212,6 @@ class EditCsv:
             for symbol, source in sources.items()
         }
 
-    def _store_column(self, name: str, values, decimals: int | None) -> None:
-        self.df[name] = values if decimals is None else np.round(values, decimals)
-
     def _record(self, calculation: Calculation) -> None:
         """Keep one calculation per column (recomputing a column replaces its calculation)."""
         others = [c for c in self.calculations if c.column != calculation.column]
@@ -173,13 +221,13 @@ class EditCsv:
         """Write the csv and its calculations (iv.csv + iv.calc.json)."""
         csv_path = Path(csv_path)
         csv_path.parent.mkdir(parents=True, exist_ok=True)
-        self.df.to_csv(csv_path, index=False)
+        self.df.to_csv(csv_path, index=False, float_format="%.12g")  # no 0.018000000000000002
         save_calculations(calculations_path(csv_path), self.calculations)
         return csv_path
 
     def write(self, folder: Path, tex_folder: str) -> None:
         """Called by Project.build(): csv, calculations and a .tex with table and formulas."""
         csv_path = self.save(folder / f"{self.name}.csv")
-        sections = [table_tex(csv_path, self.name), calculations_section_to_tex(self.calculations)]
-        tex = "\n\n".join(section for section in sections if section) + "\n"
+        notes = [calculations_section_to_tex(self.calculations)]
+        tex = table_tex(csv_path, escape_latex(self.name), f"tab:{self.name}", notes)
         (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")
