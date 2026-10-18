@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pemlab.analysis import Analysis
 from pemlab.artifacts import Artifact, TableArtifact
-from pemlab.data import EditCsv
+from pemlab.data import EditCsv, column_variables_to_text
 
 _BUILD_MARKER = ".pemlab-build"
 _RMTREE_ERROR_ARGUMENT = "onexc" if sys.version_info >= (3, 12) else "onerror"
@@ -53,6 +53,15 @@ class Project:
     def tables_from_folder(self, folder: str | Path) -> None:
         for csv_file in sorted(Path(folder).glob("*.csv")):
             self.table(csv_file)
+
+    def column_names_from_folder(self, folder: str | Path) -> None:
+        """Print one Python variable per CSV column, ready to copy into your script.
+
+        A helper for the start of an analysis: call it once, paste the output into the script
+        and delete the call again.
+        """
+        csv_files = sorted(Path(folder).glob("*.csv"))
+        print(column_variables_to_text(csv_files) if csv_files else f"No csv files in {folder}")
 
     def _reset_build_folder(self) -> None:
         """Delete the whole build folder and create it empty again.

@@ -47,12 +47,15 @@ from pemlab import Project
 
 lab = Project("build")
 
-table = lab.edit_csv("data/resistor.csv", name="resistor")   # columns "U [V]", "I [mA]"
-table.replace_column("I [mA]", "I [A]", "I * 1e-3")           # change a column in place
-table.add_uncertainty("sigma_U [V]", "U", sigmas={"U": 0.01})  # device accuracy
+# write every column name once and reuse it
+U, I_mA, I, SIGMA_U = "U [V]", "I [mA]", "I [A]", "sigma_U [V]"
+
+table = lab.edit_csv("data/resistor.csv", name="resistor")        # columns U [V], I [mA]
+table.replace_column(I_mA, I, "I_mA * 1e-3", I_mA=I_mA)           # change a column in place
+table.add_uncertainty(SIGMA_U, "U", {"U": 0.01}, U=U)             # device accuracy
 
 analysis = lab.analysis(table)
-data = analysis.make_PlotData("I [A]", "U [V]", "sigma_U [V]")
+data = analysis.make_PlotData(I, U, SIGMA_U)
 
 
 def ohm(x, R):

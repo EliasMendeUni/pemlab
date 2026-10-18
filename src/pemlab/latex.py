@@ -7,6 +7,7 @@ exactly where they are \\input).
 from pemlab.calculation import Calculation
 from pemlab.fit import FitResult
 from pemlab.formulas import column_symbol, normalize_unit, split_unit, symbol_latex
+from pemlab.stats import MeanResult
 
 _ESCAPES = {
     "\\": r"\textbackslash{}", "_": r"\_", "%": r"\%", "&": r"\&", "#": r"\#",
@@ -50,13 +51,28 @@ def column_latex(column: str) -> str:
     return rf"\mathrm{{{escape_latex(symbol)}}}"
 
 
-def quantity_to_tex(value: float, unit: str | None) -> str:
-    """4e-05 with unit 'V' -> '\\SI{4e-05}{V}' (siunitx)."""
+def _siunitx_unit(unit: str) -> str:
+    unit = normalize_unit(unit).replace("$", "").replace(" ", "")
+    return _SIUNITX_UNITS.get(unit, unit)
+
+
+def number_with_unit_to_tex(number: str, unit: str | None) -> str:
+    """'4e-05' with unit 'V' -> '\\SI{4e-05}{V}' (siunitx)."""
     if unit is None:
-        return rf"\num{{{value:g}}}"
-    siunitx_unit = normalize_unit(unit).replace("$", "").replace(" ", "")
-    siunitx_unit = _SIUNITX_UNITS.get(siunitx_unit, siunitx_unit)
-    return rf"\SI{{{value:g}}}{{{siunitx_unit}}}"
+        return rf"\num{{{number}}}"
+    return rf"\SI{{{number}}}{{{_siunitx_unit(unit)}}}"
+
+
+def quantity_to_tex(value: float, unit: str | None) -> str:
+    return number_with_unit_to_tex(f"{value:g}", unit)
+
+
+def value_error_to_tex(value: str, error: str | None, unit: str | None) -> str:
+    """'469.7', '0.3', 'V' -> '$(469.7 \\pm 0.3)\\,\\si{V}$' (inline math)."""
+    number = value if error is None else rf"({value} \pm {error})"
+    if unit is None:
+        return f"${number}$"
+    return rf"${number}\,\si{{{_siunitx_unit(unit)}}}$"
 
 
 def _constant_sigmas_to_tex(calculation: Calculation) -> str:
@@ -66,7 +82,7 @@ def _constant_sigmas_to_tex(calculation: Calculation) -> str:
             continue
         unit = split_unit(calculation.inputs[symbol])[1]
         items.append(f"${symbol_latex(f'sigma_{symbol}')} = {quantity_to_tex(value, unit)}$")
-    return f"(mit {', '.join(items)})" if items else ""
+    return f"(with {', '.join(items)})" if items else ""
 
 
 def calculation_to_tex(calculation: Calculation) -> str:
@@ -77,13 +93,13 @@ def calculation_to_tex(calculation: Calculation) -> str:
 
 
 def calculations_to_tex(calculations: list[Calculation]) -> str:
-    """All calculations in one paragraph; LaTeX breaks the line when it is full."""
-    return "\n\\qquad\n".join(calculation_to_tex(c) for c in calculations)
+    """All shown calculations in one paragraph; LaTeX breaks the line when it is full."""
+    return "\n\\qquad\n".join(calculation_to_tex(c) for c in calculations if c.show)
 
 
 def calculations_section_to_tex(calculations: list[Calculation]) -> str:
-    """Label plus calculations, empty string if there are none."""
-    if not calculations:
+    """Label plus calculations, empty string if none of them is to be shown."""
+    if not any(c.show for c in calculations):
         return ""
     return "Calculations:\n" + calculations_to_tex(calculations)
 
@@ -131,10 +147,17 @@ def table_float_to_tex(
     """
     header_line = " & ".join(name_to_tex(header) for header in headers)
     body = [" & ".join(escape_latex(cell) for cell in row) + r" \\" for row in rows]
+    return _table_float(header_line, body, "c" * len(headers), caption, label, notes)
+
+
+def _table_float(
+    header_line: str, body: list[str], alignment: str, caption: str, label: str, notes: list[str]
+) -> str:
+    """The [H] table float: tabular, caption, label and notes."""
     lines = [
         r"\begin{table}[H]",
         r"  \centering",
-        rf"  \begin{{tabular}}{{@{{}}{'c' * len(headers)}@{{}}}}",
+        rf"  \begin{{tabular}}{{@{{}}{alignment}@{{}}}}",
         r"    \toprule",
         f"    {header_line} \\\\",
         r"    \midrule",
@@ -147,6 +170,42 @@ def table_float_to_tex(
         r"\end{table}",
     ]
     return "\n".join(line for line in lines if line) + "\n"
+
+
+def _mean_rows(result: MeanResult, column: str) -> list[tuple[str, str]]:
+    """(label, value) pairs of the mean table; both are LaTeX."""
+    unit = split_unit(column)[1]
+    symbol = column_latex(column)
+    value, error = result.formatted_mean()
+    kind = "weighted mean" if result.weighted else "mean"
+
+    rows = [
+        ("number of values", f"${result.n}$"),
+        (rf"{kind} $\bar{{{symbol}}}$", value_error_to_tex(value, None, unit)),
+    ]
+    if result.std is not None:
+        rows.append(("standard deviation", value_error_to_tex(f"{result.std:.3g}", None, unit)))
+    if error is not None:
+        label = "uncertainty of the weighted mean" if result.weighted else "standard error"
+        rows.append((label, value_error_to_tex(error, None, unit)))
+    if result.chi2_ndf is not None:
+        rows.append((r"$\chi^2/\mathrm{ndf}$", f"${result.chi2_ndf:.3g}$"))
+    if result.reference is not None:
+        rows.append(("reference value", value_error_to_tex(f"{result.reference:g}", None, unit)))
+        rows.append(("deviation", value_error_to_tex(f"{result.deviation:+.3g}", None, unit)))
+    if result.relative_deviation is not None:
+        rows.append(("relative deviation", rf"${result.relative_deviation:+.2g}\,\%$"))
+    if result.deviation_in_sigma is not None:
+        rows.append(("deviation in units of the uncertainty", f"${result.deviation_in_sigma:.2g}$"))
+    return rows
+
+
+def mean_result_to_tex(
+    result: MeanResult, column: str, caption: str, label: str, notes: list[str]
+) -> str:
+    """Table float with the mean of a column, its spread and (optional) the reference."""
+    body = [f"{row_label} & {value} \\\\" for row_label, value in _mean_rows(result, column)]
+    return _table_float("quantity & value", body, "lr", caption, label, notes)
 
 
 def figure_float_to_tex(image_file: str, caption: str, label: str, notes: list[str]) -> str:

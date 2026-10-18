@@ -18,11 +18,14 @@
 
 ```{eval-rst}
 .. autoclass:: pemlab.Analysis
-   :members: make_PlotData, plot_data, regression
+   :members: make_PlotData, plot_data, regression, mean
 
 .. autoclass:: pemlab.data.PlotData
    :members:
 
 .. autoclass:: pemlab.fit.FitResult
+   :members:
+
+.. autoclass:: pemlab.stats.MeanResult
    :members:
 ```

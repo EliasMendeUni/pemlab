@@ -15,6 +15,7 @@ class Calculation:
     inputs: dict[str, str]  # symbol -> column used as input
     sigmas: dict[str, str | float]  # uncertainty only: symbol -> sigma column or constant
     latex: str  # expression that computes the column, as LaTeX
+    show: bool = True  # list it under "Calculations" in the report
 
     @property
     def dependencies(self) -> list[str]:

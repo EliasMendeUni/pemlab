@@ -1,5 +1,6 @@
 """Csv data: reading, editing with documented calculations, LaTeX tables."""
 
+import keyword
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,23 +23,31 @@ from pemlab.formulas import (
     propagate_uncertainty,
     rename_symbol,
     split_unit,
+    symbol_latex,
     to_latex,
 )
-from pemlab.latex import calculations_section_to_tex, escape_latex, table_float_to_tex
+from pemlab.latex import (
+    calculations_section_to_tex,
+    column_latex,
+    escape_latex,
+    table_float_to_tex,
+)
 
 
 def _rounded(values, decimals: int | None):
     return values if decimals is None else np.round(values, decimals)
 
 
-def _distinguish_old_symbol(expression, old_name: str, new_name: str):
-    """Display only: if a column keeps its symbol (I [mA] -> I [A]), the old one shows as I_mA."""
-    symbol = column_symbol(old_name)
-    if symbol != column_symbol(new_name):
-        return expression
+def _distinguish_old_symbol(expression, inputs: dict[str, str], old_name: str, new_name: str):
+    """Display only: a variable holding the old column that would look like the new column
+    (I for I [mA] -> I [A]) is shown with the old unit as index (I_mA)."""
+    left = column_latex(new_name)
     unit = split_unit(old_name)[1]
     suffix = re.sub(r"\W", "", unit or "") or "old"
-    return rename_symbol(expression, symbol, f"{symbol}_{suffix}")
+    for variable, column in inputs.items():
+        if column == old_name and symbol_latex(variable) == left:
+            expression = rename_symbol(expression, variable, f"{variable}_{suffix}")
+    return expression
 
 
 @dataclass
@@ -51,6 +60,50 @@ class PlotData:
 def get_csv_data(file: str | Path) -> list[tuple[str, np.ndarray]]:
     df = pd.read_csv(Path(file))
     return [(c, df[c].to_numpy()) for c in df.columns]
+
+
+def _variable_name(column: str) -> str:
+    """Python variable name for a column: '$\\sigma_{U_{out}}$ [V]' -> 'sigma_U_out'."""
+    name = re.sub(r"\W+", "_", column_symbol(column)).strip("_") or "column"
+    if name[0].isdigit():
+        name = f"_{name}"
+    return f"{name}_" if keyword.iskeyword(name) else name
+
+
+def _unique_variable_name(column: str, stem: str, used: dict[str, str]) -> str:
+    """The plain name if it is free (or already means this column), else a more specific one."""
+    name = _variable_name(column)
+    unit = re.sub(r"\W+", "", split_unit(column)[1] or "")
+    file_part = re.sub(r"\W+", "_", stem)
+    candidates = [name, *([f"{name}_{unit}"] if unit else []), f"{name}_{file_part}"]
+    for candidate in candidates:
+        if used.get(candidate, column) == column:
+            return candidate
+    counter = 2
+    while f"{name}_{counter}" in used:
+        counter += 1
+    return f"{name}_{counter}"
+
+
+def _python_string(text: str) -> str:
+    """Source code for a string: r"..." if it has backslashes, so it can be copied as it is."""
+    if '"' in text or text.endswith("\\"):
+        return repr(text)
+    return f'r"{text}"' if "\\" in text else f'"{text}"'
+
+
+def column_variables_to_text(csv_files: list[Path]) -> str:
+    """Python assignments with one variable per column, grouped by csv file."""
+    used: dict[str, str] = {}  # variable name -> column name
+    blocks = []
+    for csv_file in csv_files:
+        lines = [f"# {csv_file.name}"]
+        for column in pd.read_csv(csv_file, nrows=0).columns:
+            name = _unique_variable_name(column, csv_file.stem, used)
+            used[name] = column
+            lines.append(f"{name} = {_python_string(column)}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
 
 
 def table_tex(
@@ -94,8 +147,9 @@ class LatexConverter:
 class EditCsv:
     """A csv table to which computed columns are added; every calculation is recorded.
 
-    Formulas are strings over the column names without unit, e.g. "U * I" for the
-    columns "U [V]" and "I [A]". Calculations are stored next to the saved csv.
+    Formulas are strings with variables, e.g. "U * I". Every variable is assigned a column
+    explicitly (U="U [V]", I="I [A]"), so the column names can be anything. Calculations are
+    stored next to the saved csv.
     """
 
     kind = "data"
@@ -116,92 +170,124 @@ class EditCsv:
     def column(self, name: str) -> np.ndarray:
         return self.df[name].to_numpy(dtype=float)
 
-    def add_column(self, name: str, formula: str, decimals: int | None = None) -> "EditCsv":
-        """New column from a formula, e.g. add_column("P [W]", "U * I", decimals=3).
+    def add_column(
+        self,
+        name: str,
+        formula: str,
+        *,
+        decimals: int | None = None,
+        show: bool = True,
+        **columns: str,
+    ) -> "EditCsv":
+        """New column from a formula. `columns` assigns a column to every variable of it:
+
+            add_column("P [W]", "U * I", U="U [V]", I="I [A]", decimals=3)
 
         `decimals`: round the values to this many decimal places (None: no rounding).
+        `show`: list the calculation under "Calculations" in the report.
         """
         expression = parse_formula(formula)
-        inputs = self._input_columns(expression)
+        inputs = self._bind(expression, columns)
         values = evaluate(expression, self._input_values(inputs))
         self.df[name] = _rounded(values, decimals)
-        self._record(Calculation(name, "column", formula, inputs, {}, to_latex(expression)))
+        calculation = Calculation(name, "column", formula, inputs, {}, to_latex(expression), show)
+        self._record(calculation)
         return self
 
     def replace_column(
-        self, old_name: str, new_name: str, formula: str, decimals: int | None = None
+        self,
+        old_name: str,
+        new_name: str,
+        formula: str,
+        *,
+        decimals: int | None = None,
+        show: bool = True,
+        **columns: str,
     ) -> "EditCsv":
         """Change a column in place (same position, no new column; the raw csv is untouched).
 
-        E.g. replace_column("I [mA]", "I [A]", "I * 1e-3"): in the formula, I is the old column.
+            replace_column("I [mA]", "I [A]", "I * 1e-3", I="I [mA]")
+
+        The old column is used like any other, so it has to be assigned to a variable.
+        `decimals`, `show` and `columns` as in add_column.
         """
         if old_name not in self.df.columns:
-            columns = list(self.df.columns)
-            raise ValueError(f"Spalte '{old_name}' gibt es nicht. Vorhanden: {columns}")
+            raise ValueError(f"Spalte '{old_name}' gibt es nicht. Vorhanden: {self._known()}")
         expression = parse_formula(formula)
-        inputs = self._input_columns(expression)
+        inputs = self._bind(expression, columns)
         values = _rounded(evaluate(expression, self._input_values(inputs)), decimals)
 
         position = self.df.columns.get_loc(old_name)
         self.df = self.df.drop(columns=old_name)
         self.df.insert(position, new_name, values)
 
-        shown = _distinguish_old_symbol(expression, old_name, new_name)
-        self._record(Calculation(new_name, "column", formula, inputs, {}, to_latex(shown)))
+        shown = _distinguish_old_symbol(expression, inputs, old_name, new_name)
+        self._record(Calculation(new_name, "column", formula, inputs, {}, to_latex(shown), show))
         return self
 
     def add_uncertainty(
         self,
         name: str,
         formula: str,
-        sigmas: dict[str, str | float] | None = None,
+        sigmas: dict[str, str | float],
+        *,
         decimals: int | None = None,
+        show: bool = True,
+        **columns: str,
     ) -> "EditCsv":
         """New column with the Gaussian error propagation of `formula`.
 
-        The derivatives are computed analytically. The uncertainty of a symbol is taken from
-        the column `sigma_<symbol>` unless `sigmas` gives a column name or a constant for it,
-        e.g. sigmas={"U": 0.01} for the accuracy of a device.
-        `decimals`: round the values to this many decimal places (None: no rounding).
+            add_uncertainty("sigma_P [W]", "U * I", {"U": 0.01, "I": "sigma_I [A]"},
+                            U="U [V]", I="I [A]")
+
+        The derivatives are computed analytically. `sigmas` gives the uncertainty of every
+        variable: a number (e.g. the accuracy of a device, 0 for an exact quantity) or the name
+        of a column. `decimals`, `show` and `columns` as in add_column.
         """
         expression = parse_formula(formula)
-        inputs = self._input_columns(expression)
-        sigma_sources = {symbol: self._sigma_source(symbol, sigmas or {}) for symbol in inputs}
+        inputs = self._bind(expression, columns)
+        sigma_sources = self._bind_sigmas(list(inputs), sigmas)
         propagated = propagate_uncertainty(expression)
 
         values = self._input_values(inputs)
         values.update(self._sigma_values(sigma_sources))
         self.df[name] = _rounded(evaluate(propagated, values), decimals)
-        self._record(
-            Calculation(name, "uncertainty", formula, inputs, sigma_sources, to_latex(propagated))
-        )
+        latex = to_latex(propagated)
+        self._record(Calculation(name, "uncertainty", formula, inputs, sigma_sources, latex, show))
         return self
 
-    def _columns_by_symbol(self) -> dict[str, str]:
-        symbols = [column_symbol(column) for column in self.df.columns]
-        duplicates = {symbol for symbol in symbols if symbols.count(symbol) > 1}
-        if duplicates:
-            raise ValueError(f"Mehrere Spalten mit demselben Symbol (ohne Einheit): {duplicates}")
-        return dict(zip(symbols, self.df.columns, strict=True))
+    def _known(self) -> list[str]:
+        return list(self.df.columns)
 
-    def _input_columns(self, expression) -> dict[str, str]:
-        by_symbol = self._columns_by_symbol()
-        missing = [s for s in input_symbols(expression) if s not in by_symbol]
+    def _bind(self, expression, columns: dict[str, str]) -> dict[str, str]:
+        """Check that the variables of the formula and the given columns fit together."""
+        variables = input_symbols(expression)
+        missing = [v for v in variables if v not in columns]
+        unused = [v for v in columns if v not in variables]
+        unknown = [c for c in columns.values() if c not in self.df.columns]
         if missing:
-            known = sorted(by_symbol)
-            raise ValueError(f"Keine Spalte für {missing}. Vorhandene Symbole: {known}")
-        return {symbol: by_symbol[symbol] for symbol in input_symbols(expression)}
+            example = f'{missing[0]}="<Spaltenname>"'
+            raise ValueError(f"Für {missing} fehlt eine Spalte, z. B. {example}.")
+        if unused:
+            raise ValueError(f"{unused} kommt in der Formel nicht vor (Variablen: {variables}).")
+        if unknown:
+            raise ValueError(f"Spalte(n) {unknown} gibt es nicht. Vorhanden: {self._known()}")
+        return {variable: columns[variable] for variable in variables}
 
-    def _sigma_source(self, symbol: str, given: dict[str, str | float]) -> str | float:
-        if symbol in given:
-            return given[symbol]
-        sigma_column = self._columns_by_symbol().get(f"sigma_{symbol}")
-        if sigma_column is None:
-            raise ValueError(
-                f"Keine Unsicherheit für '{symbol}': Spalte 'sigma_{symbol} [..]' fehlt, "
-                f"gib sie mit sigmas={{'{symbol}': Wert oder Spaltenname}} an."
-            )
-        return sigma_column
+    def _bind_sigmas(
+        self, variables: list[str], sigmas: dict[str, str | float]
+    ) -> dict[str, str | float]:
+        """One uncertainty (number or column name) for every variable, nothing more."""
+        missing = [v for v in variables if v not in sigmas]
+        unused = [v for v in sigmas if v not in variables]
+        unknown = [s for s in sigmas.values() if isinstance(s, str) and s not in self.df.columns]
+        if missing:
+            raise ValueError(f"In sigmas fehlt {missing} (Zahl oder Spalte, 0 wenn exakt).")
+        if unused:
+            raise ValueError(f"sigmas enthält {unused}, das nicht in der Formel vorkommt.")
+        if unknown:
+            raise ValueError(f"Spalte(n) {unknown} gibt es nicht. Vorhanden: {self._known()}")
+        return {variable: sigmas[variable] for variable in variables}
 
     def _input_values(self, inputs: dict[str, str]) -> dict[str, np.ndarray]:
         return {symbol: self.column(column) for symbol, column in inputs.items()}

@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from pemlab.artifacts import Artifact, PlotArtifact
+from pemlab.artifacts import Artifact, MeanArtifact, PlotArtifact
 from pemlab.calculation import collect_calculations
 from pemlab.data import EditCsv, PlotData
 from pemlab.fit import FitResult, fit_function
@@ -12,9 +12,11 @@ from pemlab.latex import (
     calculations_section_to_tex,
     fit_formula_to_tex,
     fit_result_to_tex,
+    mean_result_to_tex,
     name_to_tex,
 )
 from pemlab.plotting import make_data_figure, make_fit_figure, quantity_to_mathtext
+from pemlab.stats import MeanResult, mean_of
 
 
 def _used_columns(data: PlotData) -> list[str]:
@@ -68,9 +70,39 @@ class Analysis:
         self._add_plot(name, figure, data, caption, [_fit_section(function, data, result)])
         return result
 
+    def mean(
+        self,
+        name: str,
+        column: str,
+        sigma: str | None = None,
+        reference: float | None = None,
+        caption: str | None = None,
+    ) -> MeanResult:
+        """Mean of a column with standard deviation and uncertainty of the mean.
+
+        Without `sigma` this is the arithmetic mean with the standard error s/sqrt(n). With
+        `sigma` (a column of uncertainties) it is the weighted mean with chi-squared per degree
+        of freedom. `reference` (e.g. a literature value) adds the deviation from it.
+        The result is also written to the build folder as a table.
+        """
+        values = self.table.column(column)
+        sigmas = None if sigma is None else self.table.column(sigma)
+        result = mean_of(values, sigmas, reference)
+        print(result.summary())
+
+        used = [column] if sigma is None else [column, sigma]
+        calculations = collect_calculations(self.table.calculations, used)
+        notes = [calculations_section_to_tex(calculations)]
+        caption = caption or f"Mean of {name_to_tex(column)}"
+        tex = mean_result_to_tex(result, column, caption, f"tab:mean_{name}", notes)
+        self._publish(MeanArtifact(name, tex))
+        return result
+
     def _add_plot(self, name, figure, data: PlotData, caption, notes: list[str]) -> None:
         calculations = collect_calculations(self.table.calculations, _used_columns(data))
         notes = [*notes, calculations_section_to_tex(calculations)]
-        artifact = PlotArtifact(name, figure, caption or _default_caption(data), notes)
+        self._publish(PlotArtifact(name, figure, caption or _default_caption(data), notes))
+
+    def _publish(self, artifact: Artifact) -> None:
         if self._register is not None:
             self._register(artifact)

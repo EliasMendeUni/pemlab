@@ -10,7 +10,7 @@ from pemlab.latex import escape_latex, figure_float_to_tex
 
 
 class Artifact(Protocol):
-    kind: str  # subfolder of the build folder: "data", "plots", "tables"
+    kind: str  # subfolder of the build folder: "data", "plots", "means", "tables"
     name: str
 
     def write(self, folder: Path, tex_folder: str) -> None:
@@ -34,6 +34,17 @@ class PlotArtifact:
             f"{tex_folder}/{self.name}.pdf", self.caption, f"fig:{self.name}", self.notes
         )
         (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")
+
+
+class MeanArtifact:
+    kind = "means"
+
+    def __init__(self, name: str, tex: str):
+        self.name = name
+        self.tex = tex
+
+    def write(self, folder: Path, tex_folder: str) -> None:
+        (folder / f"{self.name}.tex").write_text(self.tex, encoding="utf-8")
 
 
 class TableArtifact:
