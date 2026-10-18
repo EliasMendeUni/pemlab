@@ -1,6 +1,9 @@
 """Project: collects csv edits, plots and tables and writes them to one build folder."""
 
+import os
 import shutil
+import stat
+import sys
 from pathlib import Path
 
 from pemlab.analysis import Analysis
@@ -8,6 +11,13 @@ from pemlab.artifacts import Artifact, TableArtifact
 from pemlab.data import EditCsv
 
 _BUILD_MARKER = ".pemlab-build"
+_RMTREE_ERROR_ARGUMENT = "onexc" if sys.version_info >= (3, 12) else "onerror"
+
+
+def _clear_read_only_and_retry(function, path, _error) -> None:
+    """rmtree error handler: Windows refuses to delete read-only files and folders (OneDrive)."""
+    os.chmod(path, stat.S_IWRITE)
+    function(path)
 
 
 class Project:
@@ -57,7 +67,7 @@ class Project:
                     f"'{folder}' ist nicht leer und wurde nicht von pemlab angelegt. "
                     "Lösche den Ordner einmal selbst oder wähle einen anderen Build-Ordner."
                 )
-            shutil.rmtree(folder)
+            shutil.rmtree(folder, **{_RMTREE_ERROR_ARGUMENT: _clear_read_only_and_retry})
         folder.mkdir(parents=True)
         (folder / _BUILD_MARKER).touch()
 
