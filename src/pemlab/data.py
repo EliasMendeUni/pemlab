@@ -21,7 +21,7 @@ from pemlab.formulas import (
     propagate_uncertainty,
     to_latex,
 )
-from pemlab.latex import calculations_to_tex
+from pemlab.latex import calculations_section_to_tex
 
 
 @dataclass
@@ -34,6 +34,11 @@ class PlotData:
 def get_csv_data(file: str | Path) -> list[tuple[str, np.ndarray]]:
     df = pd.read_csv(Path(file))
     return [(c, df[c].to_numpy()) for c in df.columns]
+
+
+def table_tex(csv_file: str | Path, name: str) -> str:
+    """LaTeX table of a csv file (caption and label from `name`)."""
+    return create_latex_table(Path(csv_file), caption=name, label=f"tab:{name}")
 
 
 class LatexConverter:
@@ -162,8 +167,8 @@ class EditCsv:
         return csv_path
 
     def write(self, folder: Path, tex_folder: str) -> None:
-        """Called by Project.build(): csv, calculations and a .tex with the formulas."""
-        self.save(folder / f"{self.name}.csv")
-        if self.calculations:
-            tex = calculations_to_tex(self.calculations) + "\n"
-            (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")
+        """Called by Project.build(): csv, calculations and a .tex with table and formulas."""
+        csv_path = self.save(folder / f"{self.name}.csv")
+        sections = [table_tex(csv_path, self.name), calculations_section_to_tex(self.calculations)]
+        tex = "\n\n".join(section for section in sections if section) + "\n"
+        (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")

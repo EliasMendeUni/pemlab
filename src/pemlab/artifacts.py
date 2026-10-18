@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Protocol
 
-from csvtex import create_latex_table, save_latex_table
 from matplotlib.figure import Figure
 
+from pemlab.data import table_tex
 from pemlab.latex import plot_page_to_tex
 
 
@@ -44,5 +44,5 @@ class TableArtifact:
         self.csv_file = Path(csv_file)
 
     def write(self, folder: Path, tex_folder: str) -> None:
-        table = create_latex_table(self.csv_file, caption=self.name, label=f"tab:{self.name}")
-        save_latex_table(table, folder / f"{self.name}.tex")
+        table = table_tex(self.csv_file, self.name)
+        (folder / f"{self.name}.tex").write_text(table + "\n", encoding="utf-8")

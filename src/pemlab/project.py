@@ -7,6 +7,8 @@ from pemlab.analysis import Analysis
 from pemlab.artifacts import Artifact, TableArtifact
 from pemlab.data import EditCsv
 
+_BUILD_MARKER = ".pemlab-build"
+
 
 class Project:
     """Set the build folder once, create things, call build() at the end.
@@ -42,12 +44,28 @@ class Project:
         for csv_file in sorted(Path(folder).glob("*.csv")):
             self.table(csv_file)
 
+    def _reset_build_folder(self) -> None:
+        """Delete the whole build folder and create it empty again.
+
+        Only folders that pemlab created (they hold a marker file) or empty ones are deleted,
+        so a wrong path like Project("data") cannot wipe other files.
+        """
+        folder = self.build_folder
+        if folder.exists():
+            if any(folder.iterdir()) and not (folder / _BUILD_MARKER).exists():
+                raise FileExistsError(
+                    f"'{folder}' ist nicht leer und wurde nicht von pemlab angelegt. "
+                    "Lösche den Ordner einmal selbst oder wähle einen anderen Build-Ordner."
+                )
+            shutil.rmtree(folder)
+        folder.mkdir(parents=True)
+        (folder / _BUILD_MARKER).touch()
+
     def build(self) -> None:
-        """Write every artifact into build/<kind>/<name>/, replacing what was there."""
+        """Empty the build folder, then write every artifact into build/<kind>/<name>/."""
+        self._reset_build_folder()
         for artifact in self._artifacts.values():
             folder = self.build_folder / artifact.kind / artifact.name
-            if folder.exists():
-                shutil.rmtree(folder)
             folder.mkdir(parents=True)
             tex_folder = f"{self.tex_prefix}/{artifact.kind}/{artifact.name}"
             artifact.write(folder, tex_folder)
