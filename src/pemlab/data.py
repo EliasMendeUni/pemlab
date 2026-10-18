@@ -89,22 +89,30 @@ class EditCsv:
     def column(self, name: str) -> np.ndarray:
         return self.df[name].to_numpy(dtype=float)
 
-    def add_column(self, name: str, formula: str) -> "EditCsv":
-        """New column from a formula, e.g. add_column("P [W]", "U * I")."""
+    def add_column(self, name: str, formula: str, decimals: int | None = None) -> "EditCsv":
+        """New column from a formula, e.g. add_column("P [W]", "U * I", decimals=3).
+
+        `decimals`: round the values to this many decimal places (None: no rounding).
+        """
         expression = parse_formula(formula)
         inputs = self._input_columns(expression)
-        self.df[name] = evaluate(expression, self._input_values(inputs))
+        self._store_column(name, evaluate(expression, self._input_values(inputs)), decimals)
         self._record(Calculation(name, "column", formula, inputs, {}, to_latex(expression)))
         return self
 
     def add_uncertainty(
-        self, name: str, formula: str, sigmas: dict[str, str | float] | None = None
+        self,
+        name: str,
+        formula: str,
+        sigmas: dict[str, str | float] | None = None,
+        decimals: int | None = None,
     ) -> "EditCsv":
         """New column with the Gaussian error propagation of `formula`.
 
         The derivatives are computed analytically. The uncertainty of a symbol is taken from
         the column `sigma_<symbol>` unless `sigmas` gives a column name or a constant for it,
         e.g. sigmas={"U": 0.01} for the accuracy of a device.
+        `decimals`: round the values to this many decimal places (None: no rounding).
         """
         expression = parse_formula(formula)
         inputs = self._input_columns(expression)
@@ -113,7 +121,7 @@ class EditCsv:
 
         values = self._input_values(inputs)
         values.update(self._sigma_values(sigma_sources))
-        self.df[name] = evaluate(propagated, values)
+        self._store_column(name, evaluate(propagated, values), decimals)
         self._record(
             Calculation(name, "uncertainty", formula, inputs, sigma_sources, to_latex(propagated))
         )
@@ -152,6 +160,9 @@ class EditCsv:
             f"sigma_{symbol}": self.column(source) if isinstance(source, str) else source
             for symbol, source in sources.items()
         }
+
+    def _store_column(self, name: str, values, decimals: int | None) -> None:
+        self.df[name] = values if decimals is None else np.round(values, decimals)
 
     def _record(self, calculation: Calculation) -> None:
         """Keep one calculation per column (recomputing a column replaces its calculation)."""

@@ -31,24 +31,26 @@ def _constant_sigmas_to_tex(calculation: Calculation) -> str:
         for symbol, value in calculation.sigmas.items()
         if not isinstance(value, str)
     ]
-    return f"mit {', '.join(items)}." if items else ""
+    return f"(mit {', '.join(items)})" if items else ""
 
 
 def calculation_to_tex(calculation: Calculation) -> str:
+    """One calculation as inline math, so several of them can follow each other in a line."""
     left = symbol_latex(column_symbol(calculation.column))
-    parts = [display_equation(left, calculation.latex), _constant_sigmas_to_tex(calculation)]
-    return "\n".join(part for part in parts if part)
+    parts = [f"${left} = {calculation.latex}$", _constant_sigmas_to_tex(calculation)]
+    return " ".join(part for part in parts if part)
 
 
 def calculations_to_tex(calculations: list[Calculation]) -> str:
-    return "\n\n".join(calculation_to_tex(c) for c in calculations)
+    """All calculations in one paragraph, separated by space; LaTeX breaks the line when full."""
+    return "\n\\qquad\n".join(calculation_to_tex(c) for c in calculations)
 
 
 def calculations_section_to_tex(calculations: list[Calculation]) -> str:
     """Heading plus calculations, empty string if there are none."""
     if not calculations:
         return ""
-    return "\n\n".join([r"\noindent\textbf{Berechnungen}", calculations_to_tex(calculations)])
+    return "\n\n".join([r"\noindent\textbf{Calculations}", calculations_to_tex(calculations)])
 
 
 def fit_formula_to_tex(y_symbol: str, expression_latex: str | None, expression_text: str) -> str:
