@@ -37,7 +37,13 @@ def name_to_tex(name: str) -> str:
 
 
 def column_latex(column: str) -> str:
-    """Column as a math symbol, e.g. for the left side of a calculation."""
+    """Column as a math symbol, e.g. for the left side of a calculation.
+
+    Math that the user wrote in the name ('$\\frac{U}{I}$ [V/A]') is used as it is.
+    """
+    base, _ = split_unit(column)
+    if "$" in base:
+        return base.replace("$", "").strip()
     symbol = column_symbol(column)
     if symbol.isidentifier():
         return symbol_latex(symbol)

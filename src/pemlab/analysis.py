@@ -14,7 +14,7 @@ from pemlab.latex import (
     fit_result_to_tex,
     name_to_tex,
 )
-from pemlab.plotting import make_data_figure, make_fit_figure, name_to_mathtext
+from pemlab.plotting import make_data_figure, make_fit_figure, quantity_to_mathtext
 
 
 def _used_columns(data: PlotData) -> list[str]:
@@ -63,7 +63,7 @@ class Analysis:
         result = fit_function(function, data.x[1], data.y[1], sigma, p0)
         print(result.summary())
 
-        formula_text = fit_expression_text(function, name_to_mathtext(data.x[0]))
+        formula_text = fit_expression_text(function, quantity_to_mathtext(data.x[0]))
         figure = make_fit_figure(data, function, result, formula_text)
         self._add_plot(name, figure, data, caption, [_fit_section(function, data, result)])
         return result
