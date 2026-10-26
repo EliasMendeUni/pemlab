@@ -8,5 +8,6 @@
 installation
 guide
 tutorial
+instruments
 api
 ```

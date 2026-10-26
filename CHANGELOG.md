@@ -14,6 +14,10 @@
 - `Analysis.mean`: mean (optionally weighted) with standard deviation, uncertainty of the mean
   and deviation from a reference value, also as a LaTeX table
 - `Project.column_names_from_folder`: prints a Python variable for every CSV column
+- `pemlab.instruments` (extra `pemlab[instruments]`): `find_instruments` prints the code to open every
+  connected VISA instrument, DMM measurements (`measure_voltage`, `measure_current`,
+  `measure_resistance`, Pt100 temperature), `PowerSupply`, `FunctionGenerator`, `Oscilloscope`,
+  `MeasurementLog` (csv for `lab.edit_csv`) and `measure_series`
 - Sphinx documentation (Furo theme) with a tutorial notebook, deployed to GitHub Pages
 
 ### Removed

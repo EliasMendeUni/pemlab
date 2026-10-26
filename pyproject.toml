@@ -27,7 +27,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff"]
+dev = ["ruff", "pytest"]
+instruments = ["pyvisa", "pyvisa-py"]
 docs = ["sphinx", "furo", "myst-nb"]
 
 [tool.hatch.version]

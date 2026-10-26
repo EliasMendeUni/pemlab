@@ -29,3 +29,35 @@
 .. autoclass:: pemlab.stats.MeanResult
    :members:
 ```
+
+## Instruments
+
+```{eval-rst}
+.. autofunction:: pemlab.instruments.find_instruments
+
+.. autofunction:: pemlab.instruments.measure_voltage
+
+.. autofunction:: pemlab.instruments.measure_current
+
+.. autofunction:: pemlab.instruments.measure_resistance
+
+.. autofunction:: pemlab.instruments.measure_temperature_pt100
+
+.. autofunction:: pemlab.instruments.pt100_temperature
+
+.. autoclass:: pemlab.instruments.PowerSupply
+   :members:
+
+.. autoclass:: pemlab.instruments.FunctionGenerator
+   :members:
+
+.. autoclass:: pemlab.instruments.Oscilloscope
+   :members:
+
+.. autoclass:: pemlab.instruments.MeasurementLog
+   :members:
+
+.. autofunction:: pemlab.instruments.measure_series
+
+.. autofunction:: pemlab.instruments.measure_repeated
+```
