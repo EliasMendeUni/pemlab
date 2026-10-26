@@ -60,4 +60,14 @@
 .. autofunction:: pemlab.instruments.measure_series
 
 .. autofunction:: pemlab.instruments.measure_repeated
+
+.. autofunction:: pemlab.instruments.measure_timeseries
+
+.. autofunction:: pemlab.instruments.edge_times
+
+.. autofunction:: pemlab.instruments.edge_duration
+
+.. autofunction:: pemlab.instruments.find_peak
+
+.. autofunction:: pemlab.instruments.fit_exponential
 ```

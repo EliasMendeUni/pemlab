@@ -1,5 +1,8 @@
 """Function generator (commands of the Rigol DG series)."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 _SHAPES = {"sine": "SINusoid", "square": "SQUare", "ramp": "RAMP", "noise": "NOISe", "dc": "DC"}
 
 
@@ -29,3 +32,12 @@ class FunctionGenerator:
 
     def off(self, channel: int = 1) -> None:
         self.resource.write(f":OUTPut{channel} OFF")
+
+    @contextmanager
+    def output(self, channel: int = 1) -> Iterator[None]:
+        """Output on inside the `with` block, and off again afterwards, also after an error."""
+        self.on(channel)
+        try:
+            yield
+        finally:
+            self.off(channel)

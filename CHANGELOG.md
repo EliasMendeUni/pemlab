@@ -18,6 +18,9 @@
   connected VISA instrument, DMM measurements (`measure_voltage`, `measure_current`,
   `measure_resistance`, Pt100 temperature), `PowerSupply`, `FunctionGenerator`, `Oscilloscope`,
   `MeasurementLog` (csv for `lab.edit_csv`) and `measure_series`
+- `measure_timeseries` (time column with the real times), `Oscilloscope.stop/run/single/stopped`,
+  `FunctionGenerator.output()`, signal helpers `edge_times`, `edge_duration` and `find_peak`,
+  and `fit_exponential` for charging and discharging curves
 - Sphinx documentation (Furo theme) with a tutorial notebook, deployed to GitHub Pages
 
 ### Removed

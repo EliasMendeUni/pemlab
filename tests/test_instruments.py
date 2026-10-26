@@ -1,5 +1,7 @@
 """Tests of the instrument helpers with a fake pyvisa resource (no hardware needed)."""
 
+import time
+
 import numpy as np
 import pytest
 
@@ -8,12 +10,17 @@ from pemlab.instruments import (
     MeasurementLog,
     Oscilloscope,
     PowerSupply,
+    edge_duration,
+    edge_times,
     find_instruments,
+    find_peak,
+    fit_exponential,
     measure_current,
     measure_repeated,
     measure_resistance,
     measure_series,
     measure_temperature_pt100,
+    measure_timeseries,
     measure_voltage,
     pt100_temperature,
 )
@@ -204,3 +211,77 @@ def test_measure_series_and_repeated():
     assert log.rows == [(1.0, 0.1, 0.2), (2.0, 0.2, 0.4), (3.0, 0.3, 0.6)]
     counter = iter(range(5))
     assert measure_repeated(lambda: next(counter), n=3) == [0, 1, 2]
+
+
+def test_measure_timeseries_uses_the_real_time():
+    log = measure_timeseries(lambda: 1.0, duration=0.03, interval=0.01, columns=["t [s]", "U [V]"])
+    times = [row[0] for row in log.rows]
+    assert len(times) == 4
+    assert times == sorted(times)
+    assert all(t >= k * 0.01 - 1e-3 for k, t in enumerate(times))
+
+    def slow():
+        time.sleep(0.03)  # slower than the interval: the time axis shows what really happened
+        return 1.0
+
+    slow_log = measure_timeseries(slow, duration=0.02, interval=0.01, columns=["t [s]", "U [V]"])
+    assert slow_log.rows[-1][0] >= 0.05
+
+
+def test_oscilloscope_stop_run_and_stopped():
+    resource = FakeResource()
+    scope = Oscilloscope(resource)
+    scope.stop()
+    scope.run()
+    scope.single()
+    with scope.stopped():
+        pass
+    assert resource.written == [":STOP", ":RUN", ":SINGle", ":STOP", ":RUN"]
+
+
+def test_function_generator_output_switches_off_after_an_error():
+    resource = FakeResource()
+    awg = FunctionGenerator(resource)
+    with pytest.raises(RuntimeError), awg.output(channel=2):
+        raise RuntimeError("boom")
+    assert resource.written == [":OUTPut2 ON", ":OUTPut2 OFF"]
+
+
+def test_edge_times_and_duration():
+    t = np.linspace(0, 10, 1001)
+    u = np.where(t < 2, 0.0, 1.0) + np.where(t > 6, 0.4, 0.0) - np.where(t > 8, 1.4, 0.0)
+    assert edge_times(t, u, level=0.5, rising=True) == pytest.approx([2.0], abs=0.02)
+    assert edge_times(t, u, level=0.5, rising=False) == pytest.approx([8.0], abs=0.02)
+    # a pulse and a smaller echo: a level below the echo finds both
+    echo = np.where((t > 2) & (t < 3), 1.0, 0.0) + np.where((t > 6) & (t < 7), 0.3, 0.0)
+    assert edge_times(t, echo, level=0.15) == pytest.approx([2.0, 6.0], abs=0.02)
+
+
+def test_edge_duration_of_a_linear_ramp():
+    t = np.linspace(0, 10, 1001)
+    u = np.clip((t - 2) / 4, 0, 1)  # rises from t=2 to t=6, fall time: reverse
+    assert edge_duration(t, u) == pytest.approx(0.8 * 4, abs=0.02)
+    assert edge_duration(t, u[::-1].copy(), rising=False) == pytest.approx(0.8 * 4, abs=0.02)
+    with pytest.raises(ValueError):
+        edge_duration(t, np.zeros_like(t) + np.where(t > 5, 1e-9, 0.0), rising=False)
+
+
+def test_find_peak_refines_between_the_samples():
+    x = np.arange(0, 6.0)
+    y = -((x - 2.3) ** 2) + 5
+    assert find_peak(x, y) == pytest.approx((2.3, 5.0), abs=1e-9)
+    assert find_peak(x, x) == pytest.approx((5.0, 5.0))  # maximum at the edge: the sample
+
+
+def test_fit_exponential_recovers_the_parameters():
+    t = np.linspace(-1, 5, 300)
+    u = 1.0 + 4.0 * np.exp(-np.clip(t, 0, None) / 0.8)  # discharging starts at t=0
+    result = fit_exponential(t, u, t_start=0)
+    values = dict(zip(result.parameter_names, result.values, strict=True))
+    assert values["U_0"] == pytest.approx(5.0, abs=1e-3)
+    assert values["U_inf"] == pytest.approx(1.0, abs=1e-3)
+    assert values["tau"] == pytest.approx(0.8, abs=1e-3)
+    rising = fit_exponential(t[t >= 0], 2.0 - 2.0 * np.exp(-t[t >= 0] / 0.5))
+    assert dict(zip(rising.parameter_names, rising.values, strict=True))["tau"] == pytest.approx(
+        0.5, abs=1e-3
+    )

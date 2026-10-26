@@ -77,7 +77,22 @@ time, voltage = scope_1.read_waveform(channel=1)
 scope_1.screenshot("data/scope.png")
 ```
 
-`source_1.on()` and `source_1.off()` switch the output without a `with` block.
+`source_1.on()` and `source_1.off()` switch the output without a `with` block. The function
+generator has the same `output()` block:
+
+```python
+with awg_1.output():
+    ...
+```
+
+The scope can be stopped, restarted or armed for a single shot (`scope_1.stop()`,
+`scope_1.run()`, `scope_1.single()`). Read a trace inside `stopped()` so that it does not change
+while it is transferred:
+
+```python
+with scope_1.stopped():
+    time, voltage = scope_1.read_waveform(channel=1)
+```
 
 ## Take a series and save it as csv
 
@@ -96,6 +111,21 @@ log = measure_series(
 log.save("data/measurements/resistor.csv")
 ```
 
+For a measurement over time use `measure_timeseries`. Its time column is the **real** time of
+every measurement, not the planned one:
+
+```python
+from pemlab.instruments import measure_timeseries
+
+log = measure_timeseries(
+    lambda: measure_voltage(dmm_1) * 1e6,
+    duration=600,                              # seconds
+    interval=2,                                # one value every 2 s
+    columns=["t [s]", r"$U_{th}$ [$\mu$V]"],
+)
+log.save("data/measurements/thermovoltage.csv")
+```
+
 Without a series, build the table yourself with `MeasurementLog`:
 
 ```python
@@ -109,3 +139,29 @@ values = measure_repeated(lambda: measure_voltage(dmm_1), n=10, wait=0.2)  # for
 ```
 
 The saved CSV is the starting point of the analysis: `lab.edit_csv("data/measurements/resistor.csv")`.
+
+## Evaluate a recorded signal
+
+These functions take the arrays of a trace (for example from `read_waveform`) or of a curve:
+
+```python
+from pemlab.instruments import edge_duration, edge_times, find_peak, fit_exponential
+
+# pulse and echo: times of the rising edges, choose a level below the smaller echo
+t_pulse, t_echo = edge_times(time, voltage, level=0.5)
+delay = t_echo - t_pulse
+
+rise = edge_duration(time, voltage)                  # 10 % to 90 % of the amplitude
+fall = edge_duration(time, voltage, rising=False)
+
+# resonance curve: position and height of the maximum, refined between the samples
+f_res, u_max = find_peak(frequencies, amplitudes)
+
+# charging or discharging a capacitor
+result = fit_exponential(time, voltage, t_start=0)   # U_0, U_inf and tau with uncertainties
+print(result.summary())
+```
+
+`fit_exponential` fits $U(t) = U_\infty + (U_0 - U_\infty)\,e^{-t/\tau}$ to the points from
+`t_start` on, and `U_0` is the value at `t_start`. Without a start time it uses the first point.
+The model is also available as `exponential` for `analysis.regression(...)`.

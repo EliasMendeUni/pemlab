@@ -1,5 +1,7 @@
 """Oscilloscope (commands of the Rigol DS1000Z series)."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +23,31 @@ class Oscilloscope:
     def __init__(self, resource):
         self.resource = resource
 
+    def run(self) -> None:
+        self.resource.write(":RUN")
+
+    def stop(self) -> None:
+        self.resource.write(":STOP")
+
+    def single(self) -> None:
+        """Arm a single acquisition (wait for one trigger, then stop)."""
+        self.resource.write(":SINGle")
+
+    @contextmanager
+    def stopped(self) -> Iterator[None]:
+        """The scope is stopped inside the `with` block and runs again afterwards.
+
+        Example::
+
+            with scope.stopped():
+                time, voltage = scope.read_waveform()
+        """
+        self.stop()
+        try:
+            yield
+        finally:
+            self.run()
+
     def measure(self, quantity: str, channel: int = 1) -> float:
         """One value from the scope's measurement: "vpp", "vrms", "vmax", "vmin", "mean",
         "freq" (Hz) or "period" (s)."""
@@ -29,8 +56,8 @@ class Oscilloscope:
         return float(self.resource.query(f":MEASure:ITEM? {_ITEMS[quantity]},CHANnel{channel}"))
 
     def read_waveform(self, channel: int = 1) -> tuple[np.ndarray, np.ndarray]:
-        """Time (s) and voltage (V) of the trace on the screen. Stop the scope first for a clean
-        trace (`scope.resource.write(":STOP")`)."""
+        """Time (s) and voltage (V) of the trace on the screen. Read it inside
+        `with scope.stopped():` so the trace does not change while it is transferred."""
         r = self.resource
         r.write(f":WAVeform:SOURce CHANnel{channel}")
         r.write(":WAVeform:MODE NORMal")
