@@ -11,10 +11,11 @@ pdflatex main.tex     # braucht graphicx, booktabs, siunitx, float
 
 1. **`Project("build")`**: Build-Ordner einmal festlegen.
 2. **`lab.edit_csv(...)`**: Rohdaten laden (die CSV wird nie verändert) und Spalten ergänzen:
-   - `add_column(name, formel, U=..., I=..., decimals=...)`: neue Spalte aus einer Formel
+   - `add_column(name, formel, numbers=..., show=...)`: neue Spalte aus einer Formel
    - `replace_column(alt, neu, formel, ...)`: Spalte ändern statt eine neue anzulegen
    - `add_uncertainty(name, formel, sigmas, U=..., ...)`: Fehlerfortpflanzung, analytisch
-   - `show=False`: Rechnung nicht unter "Calculations" im Bericht auflisten
+   - `show=True`: Rechnung unter "Calculations" im Bericht auflisten (Standard: aus)
+   - `numbers=NumberStyle(...)`: wie die Zahlen angezeigt werden (die CSV behält alle Stellen)
 3. **`lab.analysis(tabelle)`**: Plots und Regressionen
    - `make_PlotData(x, y, y_sigma)`: Spalten über ihren Namen wählen
    - `regression(name, funktion, daten, p0=...)`: Fit, Plot und Ergebnisse
@@ -31,7 +32,8 @@ pdflatex main.tex     # braucht graphicx, booktabs, siunitx, float
   einmal als Variable an (`U = "U [V]"`) und verwende sie überall.
 - `lab.column_names_from_folder("data")` druckt diese Variablen für alle Spalten aller CSV-Dateien
   eines Ordners, sortiert nach Datei. Kopiere sie ins Skript und lösche den Aufruf wieder.
-- Die Variablen einer Formel ordnest du Spalten zu: `add_column(R, "U / I", U=U, I=I)`.
+- Die Variablen einer Formel sind die Spaltennamen ohne Einheit und Math-Text: `"U / I"` meint
+  die Spalten `U [V]` und `I [A]`. Passt der Name nicht, ordnest du die Spalte zu: `U="U in V"`.
 - `sigmas` nennt für **jede** Variable den Fehler: eine Zahl oder eine Fehlerspalte
   (`0` für exakte Größen).
 - Fit-Funktionen: erstes Argument ist x, die weiteren sind die Parameter, der Rückgabewert steht

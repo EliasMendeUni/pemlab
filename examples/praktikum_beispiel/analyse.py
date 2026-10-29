@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pemlab import Project
+from pemlab import NumberStyle, Project
 
 HERE = Path(__file__).parent
 
@@ -32,19 +32,23 @@ SIGMA_R = r"$\sigma_R$ [\Omega]"
 widerstand = lab.edit_csv(HERE / "data" / "widerstand.csv", name="widerstand")
 
 # Eine Spalte ändern statt eine neue anzulegen. In der Formel steht eine Variable, der du mit
-# I_mA=... eine Spalte zuordnest. Die Rohdatei bleibt unverändert. show=False: diese triviale
-# Umrechnung erscheint nicht unter "Calculations".
-widerstand.replace_column(I_mA, I, "I_mA * 1e-3", I_mA=I_mA, show=False)
+# I_mA=... eine Spalte zuordnest. Die Rohdatei bleibt unverändert. Rechnungen erscheinen nur
+# mit show=True unter "Calculations" (Standard: nicht, so wie diese triviale Umrechnung).
+widerstand.replace_column(I_mA, I, "I_mA * 1e-3", I_mA=I_mA)
 
 # Fehler der Spannung: Gerätegenauigkeit als Konstante (die CSV hat keine sigma-Spalte).
 widerstand.add_uncertainty(SIGMA_U, "U", {"U": 0.01}, U=U)
 
-# Neue Spalte aus einer Formel, auf 1 Nachkommastelle gerundet.
-widerstand.add_column(R, "U / I", U=U, I=I, decimals=1)
+# Neue Spalte aus einer Formel. Die Variablen der Formel sind die Spaltennamen ohne Einheit
+# (U ist "U [V]", I ist "I [A]"). Gerundet wird nur die Anzeige in der Tabelle (1 Nachkomma-
+# stelle), die CSV behält alle Stellen.
+widerstand.add_column(R, "U / I", numbers=NumberStyle(decimals=1), show=True)
 
 # Fehlerfortpflanzung (analytisch). sigmas gibt für jede Variable den Fehler an: eine Zahl
 # oder den Namen einer Spalte (0 für exakte Größen).
-widerstand.add_uncertainty(SIGMA_R, "U / I", {"U": SIGMA_U, "I": 2e-5}, U=U, I=I, decimals=1)
+widerstand.add_uncertainty(
+    SIGMA_R, "U / I", {"U": SIGMA_U, "I": 2e-5}, numbers=NumberStyle(decimals=1), show=True
+)
 
 analyse_widerstand = lab.analysis(widerstand)
 daten_widerstand = analyse_widerstand.make_PlotData(I, U, SIGMA_U)
@@ -73,10 +77,10 @@ H = "H"  # Spalten ohne Einheit sind möglich (die Verstärkung ist dimensionslo
 SIGMA_H = r"$\sigma_H$"
 
 tiefpass = lab.edit_csv(HERE / "data" / "tiefpass.csv", name="tiefpass")
-tiefpass.add_column(H, "U_out / U_in", U_out=U_OUT, U_in=U_IN, decimals=4)
+tiefpass.add_column(H, "U_out / U_in", numbers=NumberStyle(decimals=4), show=True)
 tiefpass.add_uncertainty(
     SIGMA_H, "U_out / U_in", {"U_out": SIGMA_U_OUT, "U_in": 0.01},
-    U_out=U_OUT, U_in=U_IN, decimals=4,
+    numbers=NumberStyle(decimals=4), show=True,
 )
 
 analyse_tiefpass = lab.analysis(tiefpass)

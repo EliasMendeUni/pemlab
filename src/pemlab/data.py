@@ -2,7 +2,7 @@
 
 import keyword
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -32,10 +32,11 @@ from pemlab.latex import (
     escape_latex,
     table_float_to_tex,
 )
+from pemlab.numberstyle import NumberStyle
 
 
-def _rounded(values, decimals: int | None):
-    return values if decimals is None else np.round(values, decimals)
+def _numbers_dict(numbers: NumberStyle | None) -> dict | None:
+    return None if numbers is None else asdict(numbers)
 
 
 def _distinguish_old_symbol(expression, inputs: dict[str, str], old_name: str, new_name: str):
@@ -107,11 +108,31 @@ def column_variables_to_text(csv_files: list[Path]) -> str:
 
 
 def table_tex(
-    csv_file: str | Path, caption: str, label: str, notes: list[str] | None = None
+    csv_file: str | Path,
+    caption: str,
+    label: str,
+    notes: list[str] | None = None,
+    numbers: NumberStyle | None = None,
+    column_numbers: dict[str, NumberStyle] | None = None,
+    computed: frozenset[str] = frozenset(),
 ) -> str:
-    """LaTeX table of a csv file with `caption` (LaTeX) and `label`; notes stay in the float."""
+    """LaTeX table of a csv file with `caption` (LaTeX) and `label`; notes stay in the float.
+
+    The numbers are shown as written in the csv unless `numbers` (or the style of a column in
+    `column_numbers`) says otherwise; the csv itself is not changed. Computed columns (names in
+    `computed`) are shown with `significant_digits` unless they have a style of their own.
+    """
     df = pd.read_csv(Path(csv_file), dtype=str, keep_default_na=False)  # keep the written digits
-    return table_float_to_tex(list(df.columns), df.values.tolist(), caption, label, notes or [])
+    return table_float_to_tex(
+        list(df.columns),
+        df.values.tolist(),
+        caption,
+        label,
+        notes or [],
+        numbers,
+        column_numbers,
+        computed,
+    )
 
 
 class LatexConverter:
@@ -147,16 +168,21 @@ class LatexConverter:
 class EditCsv:
     """A csv table to which computed columns are added; every calculation is recorded.
 
-    Formulas are strings with variables, e.g. "U * I". Every variable is assigned a column
-    explicitly (U="U [V]", I="I [A]"), so the column names can be anything. Calculations are
-    stored next to the saved csv.
+    Formulas are strings with variables, e.g. "U * I". A variable is the name of a column
+    without unit and math markup ("U [V]" is U, "$R_x$ [k$\\Omega$]" is R_x). A column with a
+    different name is assigned explicitly (U="column name"). Calculations are stored next to the
+    saved csv. `numbers` (a NumberStyle) is how the table shows its numbers; the csv keeps the
+    full values.
     """
 
     kind = "data"
 
-    def __init__(self, file: str | Path, name: str | None = None):
+    def __init__(
+        self, file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
+    ):
         file = Path(file)
         self.name = name or file.stem
+        self.numbers = numbers
         self.df = pd.read_csv(file)
         self.calculations = load_calculations(calculations_path(file))
 
@@ -175,22 +201,25 @@ class EditCsv:
         name: str,
         formula: str,
         *,
-        decimals: int | None = None,
-        show: bool = True,
+        numbers: NumberStyle | None = None,
+        show: bool = False,
         **columns: str,
     ) -> "EditCsv":
-        """New column from a formula. `columns` assigns a column to every variable of it:
+        """New column from a formula. The variables are the names of columns:
 
-            add_column("P [W]", "U * I", U="U [V]", I="I [A]", decimals=3)
+            add_column("P [W]", "U * I")           # the columns "U [V]" and "I [A]"
+            add_column("R [Ohm]", "U / I", U="U in V")   # a column with another name
 
-        `decimals`: round the values to this many decimal places (None: no rounding).
+        `columns` assigns a column to a variable whose name is not the name of a column.
+        `numbers`: how this column is shown in the table (the csv keeps all digits).
         `show`: list the calculation under "Calculations" in the report.
         """
         expression = parse_formula(formula)
         inputs = self._bind(expression, columns)
-        values = evaluate(expression, self._input_values(inputs))
-        self.df[name] = _rounded(values, decimals)
-        calculation = Calculation(name, "column", formula, inputs, {}, to_latex(expression), show)
+        self.df[name] = evaluate(expression, self._input_values(inputs))
+        calculation = Calculation(
+            name, "column", formula, inputs, {}, to_latex(expression), show, _numbers_dict(numbers)
+        )
         self._record(calculation)
         return self
 
@@ -200,29 +229,33 @@ class EditCsv:
         new_name: str,
         formula: str,
         *,
-        decimals: int | None = None,
-        show: bool = True,
+        numbers: NumberStyle | None = None,
+        show: bool = False,
         **columns: str,
     ) -> "EditCsv":
         """Change a column in place (same position, no new column; the raw csv is untouched).
 
-            replace_column("I [mA]", "I [A]", "I * 1e-3", I="I [mA]")
+            replace_column("I [mA]", "I [A]", "I * 1e-3")
 
-        The old column is used like any other, so it has to be assigned to a variable.
-        `decimals`, `show` and `columns` as in add_column.
+        The old column is used like any other, so "I" is the old column here.
+        `numbers`, `show` and `columns` as in add_column.
         """
         if old_name not in self.df.columns:
             raise ValueError(f"Spalte '{old_name}' gibt es nicht. Vorhanden: {self._known()}")
         expression = parse_formula(formula)
         inputs = self._bind(expression, columns)
-        values = _rounded(evaluate(expression, self._input_values(inputs)), decimals)
+        values = evaluate(expression, self._input_values(inputs))
 
         position = self.df.columns.get_loc(old_name)
         self.df = self.df.drop(columns=old_name)
         self.df.insert(position, new_name, values)
 
         shown = _distinguish_old_symbol(expression, inputs, old_name, new_name)
-        self._record(Calculation(new_name, "column", formula, inputs, {}, to_latex(shown), show))
+        calculation = Calculation(
+            new_name, "replacement", formula, inputs, {}, to_latex(shown), show,
+            _numbers_dict(numbers),
+        )
+        self._record(calculation)
         return self
 
     def add_uncertainty(
@@ -231,18 +264,17 @@ class EditCsv:
         formula: str,
         sigmas: dict[str, str | float],
         *,
-        decimals: int | None = None,
-        show: bool = True,
+        numbers: NumberStyle | None = None,
+        show: bool = False,
         **columns: str,
     ) -> "EditCsv":
         """New column with the Gaussian error propagation of `formula`.
 
-            add_uncertainty("sigma_P [W]", "U * I", {"U": 0.01, "I": "sigma_I [A]"},
-                            U="U [V]", I="I [A]")
+            add_uncertainty("sigma_P [W]", "U * I", {"U": 0.01, "I": "sigma_I [A]"})
 
         The derivatives are computed analytically. `sigmas` gives the uncertainty of every
         variable: a number (e.g. the accuracy of a device, 0 for an exact quantity) or the name
-        of a column. `decimals`, `show` and `columns` as in add_column.
+        of a column. `numbers`, `show` and `columns` as in add_column.
         """
         expression = parse_formula(formula)
         inputs = self._bind(expression, columns)
@@ -251,23 +283,49 @@ class EditCsv:
 
         values = self._input_values(inputs)
         values.update(self._sigma_values(sigma_sources))
-        self.df[name] = _rounded(evaluate(propagated, values), decimals)
-        latex = to_latex(propagated)
-        self._record(Calculation(name, "uncertainty", formula, inputs, sigma_sources, latex, show))
+        self.df[name] = evaluate(propagated, values)
+        calculation = Calculation(
+            name, "uncertainty", formula, inputs, sigma_sources, to_latex(propagated), show,
+            _numbers_dict(numbers),
+        )
+        self._record(calculation)
         return self
 
     def _known(self) -> list[str]:
         return list(self.df.columns)
 
+    def _automatic_columns(self, variables: list[str], given: dict[str, str]) -> dict[str, str]:
+        """For variables without an assigned column: the column that is named like the variable."""
+        by_name: dict[str, list[str]] = {}
+        for column in self.df.columns:
+            by_name.setdefault(_variable_name(column), []).append(column)
+        found = {}
+        for variable in variables:
+            candidates = by_name.get(variable, []) if variable not in given else []
+            if len(candidates) > 1:
+                raise ValueError(
+                    f"'{variable}' passt zu mehreren Spalten {candidates}. "
+                    f'Gib eine davon an, z. B. {variable}="{candidates[0]}".'
+                )
+            if candidates:
+                found[variable] = candidates[0]
+        return found
+
     def _bind(self, expression, columns: dict[str, str]) -> dict[str, str]:
         """Check that the variables of the formula and the given columns fit together."""
+        if "decimals" in columns:
+            raise ValueError("decimals gibt es nicht mehr: numbers=NumberStyle(decimals=...)")
         variables = input_symbols(expression)
+        columns = {**self._automatic_columns(variables, columns), **columns}
         missing = [v for v in variables if v not in columns]
         unused = [v for v in columns if v not in variables]
         unknown = [c for c in columns.values() if c not in self.df.columns]
         if missing:
             example = f'{missing[0]}="<Spaltenname>"'
-            raise ValueError(f"Für {missing} fehlt eine Spalte, z. B. {example}.")
+            raise ValueError(
+                f"Zu {missing} gibt es keine Spalte gleichen Namens. Gib sie an, z. B. {example}. "
+                f"Vorhanden: {self._known()}"
+            )
         if unused:
             raise ValueError(f"{unused} kommt in der Formel nicht vor (Variablen: {variables}).")
         if unknown:
@@ -315,5 +373,17 @@ class EditCsv:
         """Called by Project.build(): csv, calculations and a .tex with table and formulas."""
         csv_path = self.save(folder / f"{self.name}.csv")
         notes = [calculations_section_to_tex(self.calculations)]
-        tex = table_tex(csv_path, escape_latex(self.name), f"tab:{self.name}", notes)
+        column_numbers = {
+            c.column: NumberStyle(**c.numbers) for c in self.calculations if c.numbers
+        }
+        computed = frozenset(c.column for c in self.calculations if c.kind != "replacement")
+        tex = table_tex(
+            csv_path,
+            escape_latex(self.name),
+            f"tab:{self.name}",
+            notes,
+            self.numbers,
+            column_numbers,
+            computed,
+        )
         (folder / f"{self.name}.tex").write_text(tex, encoding="utf-8")

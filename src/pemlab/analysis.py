@@ -10,11 +10,13 @@ from pemlab.fit import FitResult, fit_function
 from pemlab.formulas import column_symbol, fit_expression_latex, fit_expression_text
 from pemlab.latex import (
     calculations_section_to_tex,
+    column_latex,
     fit_formula_to_tex,
     fit_result_to_tex,
     mean_result_to_tex,
     name_to_tex,
 )
+from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
 from pemlab.plotting import make_data_figure, make_fit_figure, quantity_to_mathtext
 from pemlab.stats import MeanResult, mean_of
@@ -31,12 +33,13 @@ def _default_caption(data: PlotData) -> str:
     return f"{name_to_tex(data.y[0])} vs. {name_to_tex(data.x[0])}"
 
 
-def _fit_section(function, data: PlotData, result: FitResult) -> str:
-    x_symbol = column_symbol(data.x[0])
+def _fit_section(function, data: PlotData, result: FitResult, numbers: NumberStyle | None) -> str:
     formula_tex = fit_formula_to_tex(
-        data.y[0], fit_expression_latex(function, x_symbol), fit_expression_text(function, x_symbol)
+        data.y[0],
+        fit_expression_latex(function, column_latex(data.x[0])),
+        fit_expression_text(function, column_symbol(data.x[0])),
     )
-    return fit_result_to_tex(result, formula_tex)
+    return fit_result_to_tex(result, formula_tex, numbers)
 
 
 class Analysis:
@@ -44,7 +47,8 @@ class Analysis:
 
     `points`, `fit` and `layout` are the looks of all plots of this analysis (see `PointStyle`,
     `FitStyle`, `LayoutStyle`); the same arguments of a single plot override them one by one.
-    What is not given anywhere uses the defaults of the style classes.
+    What is not given anywhere uses the defaults of the style classes. `numbers` (a `NumberStyle`)
+    is how fit results and means are rounded and written.
     """
 
     def __init__(
@@ -54,9 +58,11 @@ class Analysis:
         points: PointStyle | None = None,
         fit: FitStyle | None = None,
         layout: LayoutStyle | None = None,
+        numbers: NumberStyle | None = None,
     ):
         self.table = source if isinstance(source, EditCsv) else EditCsv(source)
         self._register = register
+        self.numbers = numbers
         self.points = points
         self.fit = fit
         self.layout = layout
@@ -88,17 +94,18 @@ class Analysis:
         points: PointStyle | None = None,
         fit: FitStyle | None = None,
         layout: LayoutStyle | None = None,
+        numbers: NumberStyle | None = None,
     ) -> FitResult:
         """Fit `function(x, *parameters)` to the data and add the plot with the results."""
         points, fit = points or self.points, fit or self.fit
-        layout = layout or self.layout
+        layout, numbers = layout or self.layout, numbers or self.numbers
         sigma = None if data.y_sigma is None else data.y_sigma[1]
         result = fit_function(function, data.x[1], data.y[1], sigma, p0)
-        print(result.summary())
+        print(result.summary(numbers))
 
         formula_text = fit_expression_text(function, quantity_to_mathtext(data.x[0]))
         figure = make_fit_figure(data, function, result, formula_text, points, fit, layout)
-        notes = [_fit_section(function, data, result)]
+        notes = [_fit_section(function, data, result, numbers)]
         self._add_plot(name, figure, data, caption, notes, layout)
         return result
 
@@ -109,6 +116,7 @@ class Analysis:
         sigma: str | None = None,
         reference: float | None = None,
         caption: str | None = None,
+        numbers: NumberStyle | None = None,
     ) -> MeanResult:
         """Mean of a column with standard deviation and uncertainty of the mean.
 
@@ -117,16 +125,17 @@ class Analysis:
         of freedom. `reference` (e.g. a literature value) adds the deviation from it.
         The result is also written to the build folder as a table.
         """
+        numbers = numbers or self.numbers
         values = self.table.column(column)
         sigmas = None if sigma is None else self.table.column(sigma)
         result = mean_of(values, sigmas, reference)
-        print(result.summary())
+        print(result.summary(numbers))
 
         used = [column] if sigma is None else [column, sigma]
         calculations = collect_calculations(self.table.calculations, used)
         notes = [calculations_section_to_tex(calculations)]
         caption = caption or f"Mean of {name_to_tex(column)}"
-        tex = mean_result_to_tex(result, column, caption, f"tab:mean_{name}", notes)
+        tex = mean_result_to_tex(result, column, caption, f"tab:mean_{name}", notes, numbers)
         self._publish(MeanArtifact(name, tex))
         return result
 

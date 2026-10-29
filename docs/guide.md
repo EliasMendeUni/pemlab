@@ -76,36 +76,39 @@ end up in the LaTeX output.
 
 | Method | Purpose |
 | --- | --- |
-| `add_column(name, formula, **columns)` | new column from a formula |
-| `replace_column(old, new, formula, **columns)` | change a column in place |
-| `add_uncertainty(name, formula, sigmas, **columns)` | uncertainty of a formula |
+| `add_column(name, formula)` | new column from a formula |
+| `replace_column(old, new, formula)` | change a column in place |
+| `add_uncertainty(name, formula, sigmas)` | uncertainty of a formula |
 
-Each takes the keyword-only options `decimals=None` and `show=True`.
+Each takes the keyword-only options `numbers=None` and `show=False`.
 
 A formula is written like Python: `"U * I"`, `"sqrt(U**2 + I**2)"`, `"2 * pi * f"`. Available
 functions are `sqrt`, `exp`, `log`, `sin`, `cos`, `tan` and so on. The **variables** of the
-formula are local names. You assign each of them a column with a keyword argument:
+formula are the names of columns, without unit and math markup: `U` is the column `U [V]`,
+`R_x` is `$R_x$ [$k\Omega$]`. You write each name once:
 
 ```python
-table.add_column(R, "U / I", U=U, I=I)   # variable U is the column "U [V]", ...
+table.add_column(R, "U / I")   # the columns "U [V]" and "I [A]"
 ```
 
-pemlab checks the assignment. A variable without a column, a column that does not exist and an
-unused assignment all raise an error that names the problem.
+A variable that is not the name of a column gets its column with a keyword argument, for example
+`add_column(R, "a / b", a=U, b=I)`. pemlab checks the assignment: a variable without a column,
+a name that fits several columns, a column that does not exist and an unused assignment all raise
+an error that names the problem.
 
-`decimals` rounds the stored values. Later calculations use the rounded values.
-
-`show=False` keeps a calculation out of the "Calculations" list in the report, for example a
-trivial unit conversion. The column is still computed and stored.
+`show=True` lists a calculation under "Calculations" in the report. By default it is left out,
+because most columns are trivial steps like a unit conversion. The column is computed and
+stored either way.
 
 ```python
-table.replace_column(I_mA, I, "I_mA * 1e-3", I_mA=I_mA, show=False)
+table.replace_column(I_mA, I, "I * 1e-3")   # "I" is the old column "I [mA]"
 ```
 
-`replace_column` uses the old column like any other, so assign it to a variable as well.
+`numbers` is how the column is shown in the table, see {ref}`number-style`. The stored values are
+never rounded.
 
 ```{note}
-The names `name`, `formula`, `sigmas`, `decimals`, `show`, `old_name` and `new_name` belong to the
+The names `name`, `formula`, `sigmas`, `numbers`, `show`, `old_name` and `new_name` belong to the
 methods and cannot be used as variable names in a formula.
 ```
 
@@ -123,7 +126,7 @@ example the accuracy of a device), a string is the name of a column with the unc
 `0` for quantities that are exact:
 
 ```python
-table.add_uncertainty(SIGMA_P, "U * I", {"U": 0.01, "I": SIGMA_I}, U=U, I=I)
+table.add_uncertainty(SIGMA_P, "U * I", {"U": 0.01, "I": SIGMA_I})
 ```
 
 A missing or superfluous entry raises an error, so a typo cannot silently make a value exact.
@@ -158,6 +161,34 @@ nonlinear functions pass start values with `p0=[...]`.
 
 The result of `regression` is a {class}`~pemlab.fit.FitResult` with the parameters, their
 uncertainties and chi-squared per degree of freedom. The same numbers are in the LaTeX output.
+
+(number-style)=
+## Numbers in tables and results
+
+Only the **display** is rounded. The csv files and all calculations keep every digit. A
+{class}`~pemlab.NumberStyle` sets how numbers are shown. Every field has a default:
+
+```python
+from pemlab import NumberStyle, Project
+
+lab = Project("data/_build", numbers=NumberStyle(error_digits=1))   # all numbers of the project
+table.add_column(R, "U / I", numbers=NumberStyle(decimals=1))        # one column of a table
+analysis.regression("fit", line, data, numbers=NumberStyle(sci_below=1e-3))  # one result
+```
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `decimals` | decimals of table cells (`None`: the digits of the csv) | `None` |
+| `error_digits` | significant digits of an uncertainty; the value gets the same place | 2 |
+| `significant_digits` | digits of a number without uncertainty (and of computed columns) | 4 |
+| `sci_below` | numbers with a smaller absolute value are written as `1.5e-3` | 0.01 |
+| `sci_above` | numbers from this value on are written as `1.5e5` | 100000 |
+
+Fit results and means get the same exponent for value and uncertainty: `(2.848 ± 0.004)e-9`. A
+column computed by `add_column` or `add_uncertainty` has no precision of its own, so a table shows
+it with `significant_digits` unless you give it a `decimals`. Raw columns and unit conversions
+(`replace_column`) keep the digits of the csv. A style of a single call replaces the style of the
+project completely. `res.values` and `res.errors` of a fit are always exact.
 
 ## Look of the plots
 

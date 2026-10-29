@@ -10,12 +10,13 @@ class Calculation:
     """How one csv column was computed."""
 
     column: str
-    kind: str  # "column" or "uncertainty"
+    kind: str  # "column", "uncertainty" or "replacement" (same quantity, e.g. a unit change)
     formula: str  # formula as written by the user
     inputs: dict[str, str]  # symbol -> column used as input
     sigmas: dict[str, str | float]  # uncertainty only: symbol -> sigma column or constant
     latex: str  # expression that computes the column, as LaTeX
-    show: bool = True  # list it under "Calculations" in the report
+    show: bool = False  # list it under "Calculations" in the report
+    numbers: dict | None = None  # NumberStyle of this column in the table, as a dict
 
     @property
     def dependencies(self) -> list[str]:

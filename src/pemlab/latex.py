@@ -4,9 +4,12 @@ Needs in the report: graphicx, booktabs, siunitx, float (the floats use [H], so 
 exactly where they are \\input).
 """
 
+import re
+
 from pemlab.calculation import Calculation
 from pemlab.fit import FitResult
 from pemlab.formulas import column_symbol, normalize_unit, split_unit, symbol_latex
+from pemlab.numberstyle import NumberStyle
 from pemlab.stats import MeanResult
 
 _ESCAPES = {
@@ -67,12 +70,12 @@ def quantity_to_tex(value: float, unit: str | None) -> str:
     return number_with_unit_to_tex(f"{value:g}", unit)
 
 
-def value_error_to_tex(value: str, error: str | None, unit: str | None) -> str:
-    """'469.7', '0.3', 'V' -> '$(469.7 \\pm 0.3)\\,\\si{V}$' (inline math)."""
-    number = value if error is None else rf"({value} \pm {error})"
-    if unit is None:
-        return f"${number}$"
-    return rf"${number}\,\si{{{_siunitx_unit(unit)}}}$"
+def number_cell_to_tex(cell: str, numbers: NumberStyle, computed: bool = False) -> str:
+    """A table cell: numbers rounded and written as \\num{1.5e-3} if needed, text escaped."""
+    text = numbers.cell(cell, computed)
+    if re.fullmatch(r"[+-]?\d+(\.\d+)?[eE][+-]?\d+", text.strip()):
+        return rf"\num{{{text.strip()}}}"
+    return escape_latex(text)
 
 
 def _constant_sigmas_to_tex(calculation: Calculation) -> str:
@@ -111,10 +114,12 @@ def fit_formula_to_tex(y_column: str, expression_latex: str | None, expression_t
     return f"${column_latex(y_column)} = {expression_latex}$"
 
 
-def fit_result_to_tex(result: FitResult, formula_tex: str) -> str:
+def fit_result_to_tex(
+    result: FitResult, formula_tex: str, numbers: NumberStyle | None = None
+) -> str:
     rows = [
-        rf"  ${symbol_latex(name)}$ & ${value}$ & $\pm {error}$ \\"
-        for name, value, error in result.formatted()
+        rf"  ${symbol_latex(name)}$ & \num{{{value}}} & $\pm$ \num{{{error}}} \\"
+        for name, value, error in result.formatted(numbers)
     ]
     parts = [
         f"Regression: {formula_tex}",
@@ -139,14 +144,33 @@ def notes_to_tex(sections: list[str]) -> str:
 
 
 def table_float_to_tex(
-    headers: list[str], rows: list[list[str]], caption: str, label: str, notes: list[str]
+    headers: list[str],
+    rows: list[list[str]],
+    caption: str,
+    label: str,
+    notes: list[str],
+    numbers: NumberStyle | None = None,
+    column_numbers: dict[str, NumberStyle] | None = None,
+    computed: frozenset[str] = frozenset(),
 ) -> str:
     """Table with caption and notes as ONE float, so the notes cannot move away from it.
 
-    `caption` is LaTeX; headers are column names (see name_to_tex); cells are plain text.
+    `caption` is LaTeX; headers are column names (see name_to_tex); cells are plain text that
+    is shown with `numbers`, or with the style of its column in `column_numbers`. The columns
+    in `computed` are shown with significant digits, because they have no precision of their own.
     """
+    default = numbers or NumberStyle()
+    styles = [(column_numbers or {}).get(header, default) for header in headers]
     header_line = " & ".join(name_to_tex(header) for header in headers)
-    body = [" & ".join(escape_latex(cell) for cell in row) + r" \\" for row in rows]
+    is_computed = [header in computed for header in headers]
+    body = [
+        " & ".join(
+            number_cell_to_tex(cell, style, flag)
+            for cell, style, flag in zip(row, styles, is_computed, strict=True)
+        )
+        + r" \\"
+        for row in rows
+    ]
     return _table_float(header_line, body, "c" * len(headers), caption, label, notes)
 
 
@@ -172,27 +196,28 @@ def _table_float(
     return "\n".join(line for line in lines if line) + "\n"
 
 
-def _mean_rows(result: MeanResult, column: str) -> list[tuple[str, str]]:
+def _mean_rows(result: MeanResult, column: str, numbers: NumberStyle) -> list[tuple[str, str]]:
     """(label, value) pairs of the mean table; both are LaTeX."""
     unit = split_unit(column)[1]
     symbol = column_latex(column)
-    value, error = result.formatted_mean()
+    value, error = result.formatted_mean(numbers)
     kind = "weighted mean" if result.weighted else "mean"
 
     rows = [
         ("number of values", f"${result.n}$"),
-        (rf"{kind} $\bar{{{symbol}}}$", value_error_to_tex(value, None, unit)),
+        (rf"{kind} $\bar{{{symbol}}}$", number_with_unit_to_tex(value, unit)),
     ]
     if result.std is not None:
-        rows.append(("standard deviation", value_error_to_tex(f"{result.std:.3g}", None, unit)))
+        std = numbers.number(result.std, 3)
+        rows.append(("standard deviation", number_with_unit_to_tex(std, unit)))
     if error is not None:
         label = "uncertainty of the weighted mean" if result.weighted else "standard error"
-        rows.append((label, value_error_to_tex(error, None, unit)))
+        rows.append((label, number_with_unit_to_tex(error, unit)))
     if result.chi2_ndf is not None:
         rows.append((r"$\chi^2/\mathrm{ndf}$", f"${result.chi2_ndf:.3g}$"))
     if result.reference is not None:
-        rows.append(("reference value", value_error_to_tex(f"{result.reference:g}", None, unit)))
-        rows.append(("deviation", value_error_to_tex(f"{result.deviation:+.3g}", None, unit)))
+        rows.append(("reference value", number_with_unit_to_tex(f"{result.reference:g}", unit)))
+        rows.append(("deviation", number_with_unit_to_tex(f"{result.deviation:+.3g}", unit)))
     if result.relative_deviation is not None:
         rows.append(("relative deviation", rf"${result.relative_deviation:+.2g}\,\%$"))
     if result.deviation_in_sigma is not None:
@@ -201,10 +226,16 @@ def _mean_rows(result: MeanResult, column: str) -> list[tuple[str, str]]:
 
 
 def mean_result_to_tex(
-    result: MeanResult, column: str, caption: str, label: str, notes: list[str]
+    result: MeanResult,
+    column: str,
+    caption: str,
+    label: str,
+    notes: list[str],
+    numbers: NumberStyle | None = None,
 ) -> str:
     """Table float with the mean of a column, its spread and (optional) the reference."""
-    body = [f"{row_label} & {value} \\\\" for row_label, value in _mean_rows(result, column)]
+    rows = _mean_rows(result, column, numbers or NumberStyle())
+    body = [f"{row_label} & {value} \\\\" for row_label, value in rows]
     return _table_float("quantity & value", body, "lr", caption, label, notes)
 
 

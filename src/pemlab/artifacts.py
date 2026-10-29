@@ -7,6 +7,7 @@ from matplotlib.figure import Figure
 
 from pemlab.data import table_tex
 from pemlab.latex import escape_latex, figure_float_to_tex
+from pemlab.numberstyle import NumberStyle
 
 
 class Artifact(Protocol):
@@ -53,11 +54,12 @@ class MeanArtifact:
 class TableArtifact:
     kind = "tables"
 
-    def __init__(self, name: str, csv_file: str | Path):
+    def __init__(self, name: str, csv_file: str | Path, numbers: NumberStyle | None = None):
         self.name = name
         self.csv_file = Path(csv_file)
+        self.numbers = numbers
 
     def write(self, folder: Path, tex_folder: str) -> None:
         caption = escape_latex(f"{self.name} (raw data)")
-        table = table_tex(self.csv_file, caption, f"tab:{self.name}_raw")
+        table = table_tex(self.csv_file, caption, f"tab:{self.name}_raw", numbers=self.numbers)
         (folder / f"{self.name}.tex").write_text(table, encoding="utf-8")

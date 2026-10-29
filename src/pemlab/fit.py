@@ -2,20 +2,11 @@
 
 import inspect
 from dataclasses import dataclass
-from math import floor, isfinite, log10
 
 import numpy as np
 from scipy.optimize import curve_fit
 
-
-def format_value_error(value: float, error: float, digits: int = 2) -> tuple[str, str]:
-    """Round the error to `digits` significant digits and the value to the same decimal place."""
-    if not (isfinite(error) and error > 0):
-        return f"{value:.4g}", f"{error:.2g}"
-    decimals = digits - 1 - floor(log10(error))
-    if decimals >= 0:
-        return f"{value:.{decimals}f}", f"{error:.{decimals}f}"
-    return f"{round(value, decimals):.0f}", f"{round(error, decimals):.0f}"
+from pemlab.numberstyle import NumberStyle
 
 
 @dataclass(repr=False)
@@ -29,17 +20,18 @@ class FitResult:
     def __repr__(self) -> str:
         return f"FitResult({self.parameters_text()})"
 
-    def formatted(self) -> list[tuple[str, str, str]]:
-        """(name, value, error) as rounded strings."""
+    def formatted(self, numbers: NumberStyle | None = None) -> list[tuple[str, str, str]]:
+        """(name, value, error) as rounded strings; `values` and `errors` stay exact."""
+        numbers = numbers or NumberStyle()
         rows = zip(self.parameter_names, self.values, self.errors, strict=True)
-        return [(name, *format_value_error(value, error)) for name, value, error in rows]
+        return [(name, *numbers.value_error(value, error)) for name, value, error in rows]
 
     def parameters_text(self) -> str:
         pairs = zip(self.parameter_names, self.values, strict=True)
         return ", ".join(f"{name}={value:.3g}" for name, value in pairs)
 
-    def summary(self) -> str:
-        lines = [f"{name} = {value} ± {error}" for name, value, error in self.formatted()]
+    def summary(self, numbers: NumberStyle | None = None) -> str:
+        lines = [f"{name} = {value} ± {error}" for name, value, error in self.formatted(numbers)]
         if self.chi2 is not None and self.dof > 0:
             lines.append(f"chi²/ndf = {self.chi2:.3g}/{self.dof} = {self.chi2 / self.dof:.3g}")
         return "\n".join(lines)

@@ -9,6 +9,7 @@ from pathlib import Path
 from pemlab.analysis import Analysis
 from pemlab.artifacts import Artifact, TableArtifact
 from pemlab.data import EditCsv, column_variables_to_text
+from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
 
 _BUILD_MARKER = ".pemlab-build"
@@ -29,6 +30,8 @@ class Project:
 
     `points`, `fit` and `layout` are the looks of all plots of the project (see `PointStyle`,
     `FitStyle` and `LayoutStyle`); the same arguments of a single plot override them one by one.
+    `numbers` (a `NumberStyle`) is how tables, fit results and means show their numbers; the
+    same argument of a single call overrides it.
     """
 
     def __init__(
@@ -38,12 +41,14 @@ class Project:
         points: PointStyle | None = None,
         fit: FitStyle | None = None,
         layout: LayoutStyle | None = None,
+        numbers: NumberStyle | None = None,
     ):
         self.build_folder = Path(build_folder)
         self.tex_prefix = tex_prefix if tex_prefix is not None else self.build_folder.as_posix()
         self.points = points
         self.fit = fit
         self.layout = layout
+        self.numbers = numbers
         self._artifacts: dict[tuple[str, str], Artifact] = {}
 
     def add(self, artifact: Artifact) -> None:
@@ -52,23 +57,32 @@ class Project:
             raise ValueError(f"Ungültiger Name: {artifact.name!r}")
         self._artifacts[(artifact.kind, artifact.name)] = artifact
 
-    def edit_csv(self, file: str | Path, name: str | None = None) -> EditCsv:
-        table = EditCsv(file, name)
+    def edit_csv(
+        self, file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
+    ) -> EditCsv:
+        table = EditCsv(file, name, numbers or self.numbers)
         self.add(table)
         return table
 
     def analysis(self, source: str | Path | EditCsv) -> Analysis:
         return Analysis(
-            source, register=self.add, points=self.points, fit=self.fit, layout=self.layout
+            source,
+            register=self.add,
+            points=self.points,
+            fit=self.fit,
+            layout=self.layout,
+            numbers=self.numbers,
         )
 
-    def table(self, csv_file: str | Path, name: str | None = None) -> None:
+    def table(
+        self, csv_file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
+    ) -> None:
         csv_file = Path(csv_file)
-        self.add(TableArtifact(name or csv_file.stem, csv_file))
+        self.add(TableArtifact(name or csv_file.stem, csv_file, numbers or self.numbers))
 
-    def tables_from_folder(self, folder: str | Path) -> None:
+    def tables_from_folder(self, folder: str | Path, numbers: NumberStyle | None = None) -> None:
         for csv_file in sorted(Path(folder).glob("*.csv")):
-            self.table(csv_file)
+            self.table(csv_file, numbers=numbers)
 
     def column_names_from_folder(self, folder: str | Path) -> None:
         """Print one Python variable per CSV column, ready to copy into your script.

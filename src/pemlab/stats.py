@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from pemlab.fit import format_value_error
+from pemlab.numberstyle import NumberStyle
 
 
 @dataclass
@@ -36,14 +36,15 @@ class MeanResult:
             return None
         return abs(self.deviation) / self.error
 
-    def formatted_mean(self) -> tuple[str, str | None]:
+    def formatted_mean(self, numbers: NumberStyle | None = None) -> tuple[str, str | None]:
         """Mean and its uncertainty as rounded strings (uncertainty None if unknown)."""
+        numbers = numbers or NumberStyle()
         if self.error is None:
-            return f"{self.mean:.4g}", None
-        return format_value_error(self.mean, self.error)
+            return numbers.number(self.mean), None
+        return numbers.value_error(self.mean, self.error)
 
-    def summary(self) -> str:
-        value, error = self.formatted_mean()
+    def summary(self, numbers: NumberStyle | None = None) -> str:
+        value, error = self.formatted_mean(numbers)
         kind = "weighted mean" if self.weighted else "mean"
         lines = [f"n = {self.n}", f"{kind} = {value}" + ("" if error is None else f" ± {error}")]
         if self.std is not None:

@@ -13,6 +13,7 @@ _FUNCTION_NAMES = {
 }
 
 
+_NUMPY_NAMES = {"arcsin": "asin", "arccos": "acos", "arctan": "atan"}  # numpy -> sympy
 _UNIT_PATTERN = re.compile(r"^(.*?)\s*\[(.*)\]\s*$")
 _UNIT_ALIASES = {"Ohm": r"\Omega", "ohm": r"\Omega"}
 
@@ -81,9 +82,14 @@ def evaluate(expression: sympy.Expr, values: dict[str, np.ndarray | float]):
     return function(*(values[str(symbol)] for symbol in symbols))
 
 
-def to_latex(expression: sympy.Expr) -> str:
-    names = {symbol: symbol_latex(str(symbol)) for symbol in expression.free_symbols}
-    return sympy.latex(expression, mul_symbol="dot", symbol_names=names)
+def to_latex(expression: sympy.Expr, names: dict[str, str] | None = None) -> str:
+    """LaTeX of an expression; `names` gives the LaTeX of single symbols (e.g. a column)."""
+    names = names or {}
+    symbol_names = {
+        symbol: names.get(str(symbol), symbol_latex(str(symbol)))
+        for symbol in expression.free_symbols
+    }
+    return sympy.latex(expression, mul_symbol="dot", symbol_names=symbol_names)
 
 
 def _first_argument(function) -> str:
@@ -115,13 +121,19 @@ def fit_expression_text(function, x_name: str) -> str:
     return _rename_argument(expression, _first_argument(function), x_name)
 
 
-def fit_expression_latex(function, x_symbol: str) -> str | None:
-    """Expression of a fit function as LaTeX, None if it cannot be parsed."""
+def fit_expression_latex(function, x_latex: str) -> str | None:
+    """Expression of a fit function as LaTeX, None if it cannot be parsed.
+
+    `x_latex` is shown for the x argument, e.g. the symbol of the x column of the plot.
+    """
     expression = _return_expression(function)
-    if expression is None or not x_symbol.isidentifier():
+    if expression is None:
         return None
-    text = _rename_argument(expression.replace("np.", ""), _first_argument(function), x_symbol)
+    text = re.sub(
+        r"\b(arcsin|arccos|arctan)\b", lambda m: _NUMPY_NAMES[m.group()],
+        expression.replace("np.", ""),
+    )
     try:
-        return to_latex(parse_formula(text))
+        return to_latex(parse_formula(text), {_first_argument(function): x_latex})
     except Exception:  # arbitrary user code: any parse problem means "show it as text instead"
         return None
