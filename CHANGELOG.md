@@ -17,6 +17,8 @@
   `add_column`, `replace_column`, `add_uncertainty`, `regression` and `mean`
 - Formulas of `add_column` etc. use the column names as variables (`"U * I"` for the columns
   `U [V]` and `I [A]`); `U="..."` is only needed for another name
+- `EditCsv.set_column`: a column from your own values (e.g. fit results) that the table shows
+  with `numbers` like a computed column
 - Regression formulas with a math column on the x axis (`\frac{1}{R_x}`) are shown correctly
 - `Analysis.mean`: mean (optionally weighted) with standard deviation, uncertainty of the mean
   and deviation from a reference value, also as a LaTeX table

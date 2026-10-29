@@ -223,6 +223,23 @@ class EditCsv:
         self._record(calculation)
         return self
 
+    def set_column(
+        self, name: str, values, *, numbers: NumberStyle | None = None
+    ) -> "EditCsv":
+        """New column (or overwrite one) from values you computed yourself, e.g. fit results.
+
+            set_column("1/tau [1/s]", [1 / r.values[2] for r in results])
+
+        pemlab treats it as a computed column: the table shows `numbers.significant_digits`
+        digits (or `numbers.decimals`), the csv keeps all of them. No calculation is listed.
+        """
+        values = np.asarray(values, dtype=float)
+        if len(values) != len(self.df):
+            raise ValueError(f"{len(values)} Werte für {len(self.df)} Zeilen.")
+        self.df[name] = values
+        self._record(Calculation(name, "values", "", {}, {}, "", False, _numbers_dict(numbers)))
+        return self
+
     def replace_column(
         self,
         old_name: str,

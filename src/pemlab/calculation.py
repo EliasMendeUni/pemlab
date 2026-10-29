@@ -10,7 +10,7 @@ class Calculation:
     """How one csv column was computed."""
 
     column: str
-    kind: str  # "column", "uncertainty" or "replacement" (same quantity, e.g. a unit change)
+    kind: str  # "column", "uncertainty", "values" (set_column) or "replacement" (unit change)
     formula: str  # formula as written by the user
     inputs: dict[str, str]  # symbol -> column used as input
     sigmas: dict[str, str | float]  # uncertainty only: symbol -> sigma column or constant

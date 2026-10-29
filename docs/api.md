@@ -11,7 +11,7 @@
 
 ```{eval-rst}
 .. autoclass:: pemlab.EditCsv
-   :members: add_column, replace_column, add_uncertainty, column, save
+   :members: add_column, replace_column, add_uncertainty, set_column, column, save
 ```
 
 ## Analysis

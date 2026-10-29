@@ -79,6 +79,7 @@ end up in the LaTeX output.
 | `add_column(name, formula)` | new column from a formula |
 | `replace_column(old, new, formula)` | change a column in place |
 | `add_uncertainty(name, formula, sigmas)` | uncertainty of a formula |
+| `set_column(name, values)` | column from values you computed yourself (e.g. fit results) |
 
 Each takes the keyword-only options `numbers=None` and `show=False`.
 

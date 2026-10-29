@@ -221,3 +221,16 @@ def test_unit_change_keeps_the_digits_but_new_columns_get_four(tmp_path):
     tex = read(tmp_path / "build" / "data" / "c" / "c.tex")
     assert r"\num{1.5595e-9}" in tex  # a unit change is not a calculation: all digits stay
     assert "0.4286" in tex  # f / 7 = 0.428571...: four significant digits
+
+
+def test_set_column_is_shown_with_significant_digits(tmp_path, csv_file):
+    lab = Project(tmp_path / "build")
+    table = lab.edit_csv(csv_file)
+    table.set_column("w [1]", [3918.92509304, 4291.17235094, 4777.02840883])
+    lab.build()
+    saved = pd.read_csv(tmp_path / "build" / "data" / "ohm" / "ohm.csv")
+    assert saved["w [1]"][0] == pytest.approx(3918.92509304)
+    tex = read(tmp_path / "build" / "data" / "ohm" / "ohm.tex")
+    assert "3919 " in tex and "3918.925" not in tex
+    with pytest.raises(ValueError, match="Zeilen"):
+        table.set_column("v [1]", [1.0])
