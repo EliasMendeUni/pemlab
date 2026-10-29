@@ -21,15 +21,18 @@ class Artifact(Protocol):
 class PlotArtifact:
     kind = "plots"
 
-    def __init__(self, name: str, figure: Figure, caption: str, notes: list[str]):
+    def __init__(
+        self, name: str, figure: Figure, caption: str, notes: list[str], png_dpi: int = 200
+    ):
         self.name = name
         self.figure = figure
         self.caption = caption  # LaTeX
         self.notes = notes
+        self.png_dpi = png_dpi
 
     def write(self, folder: Path, tex_folder: str) -> None:
         self.figure.savefig(folder / f"{self.name}.pdf")
-        self.figure.savefig(folder / f"{self.name}.png", dpi=200)
+        self.figure.savefig(folder / f"{self.name}.png", dpi=self.png_dpi)
         tex = figure_float_to_tex(
             f"{tex_folder}/{self.name}.pdf", self.caption, f"fig:{self.name}", self.notes
         )

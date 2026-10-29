@@ -9,6 +9,7 @@ from pathlib import Path
 from pemlab.analysis import Analysis
 from pemlab.artifacts import Artifact, TableArtifact
 from pemlab.data import EditCsv, column_variables_to_text
+from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
 
 _BUILD_MARKER = ".pemlab-build"
 _RMTREE_ERROR_ARGUMENT = "onexc" if sys.version_info >= (3, 12) else "onerror"
@@ -25,11 +26,24 @@ class Project:
 
     `tex_prefix` is the path LaTeX uses to find the build folder (for \\includegraphics),
     relative to the folder where the report is compiled. Default: the build folder as given.
+
+    `points`, `fit` and `layout` are the looks of all plots of the project (see `PointStyle`,
+    `FitStyle` and `LayoutStyle`); the same arguments of a single plot override them one by one.
     """
 
-    def __init__(self, build_folder: str | Path, tex_prefix: str | None = None):
+    def __init__(
+        self,
+        build_folder: str | Path,
+        tex_prefix: str | None = None,
+        points: PointStyle | None = None,
+        fit: FitStyle | None = None,
+        layout: LayoutStyle | None = None,
+    ):
         self.build_folder = Path(build_folder)
         self.tex_prefix = tex_prefix if tex_prefix is not None else self.build_folder.as_posix()
+        self.points = points
+        self.fit = fit
+        self.layout = layout
         self._artifacts: dict[tuple[str, str], Artifact] = {}
 
     def add(self, artifact: Artifact) -> None:
@@ -44,7 +58,9 @@ class Project:
         return table
 
     def analysis(self, source: str | Path | EditCsv) -> Analysis:
-        return Analysis(source, register=self.add)
+        return Analysis(
+            source, register=self.add, points=self.points, fit=self.fit, layout=self.layout
+        )
 
     def table(self, csv_file: str | Path, name: str | None = None) -> None:
         csv_file = Path(csv_file)

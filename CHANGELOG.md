@@ -21,6 +21,10 @@
 - `measure_timeseries` (time column with the real times), `Oscilloscope.stop/run/single/stopped`,
   `FunctionGenerator.output()`, signal helpers `edge_times`, `edge_duration` and `find_peak`,
   and `fit_exponential` for charging and discharging curves
+- `PointStyle`, `FitStyle` and `LayoutStyle`: look of the plots (points and error bars, fit
+  curve, axes and layout) for one plot (`points=`, `fit=`, `layout=` of `plot_data` and
+  `regression`) or for a whole project (`Project(..., points=..., layout=...)`); the default
+  markers are smaller than before
 - Sphinx documentation (Furo theme) with a tutorial notebook, deployed to GitHub Pages
 
 ### Removed

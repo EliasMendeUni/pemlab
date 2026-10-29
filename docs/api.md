@@ -23,6 +23,12 @@
 .. autoclass:: pemlab.data.PlotData
    :members:
 
+.. autoclass:: pemlab.PointStyle
+
+.. autoclass:: pemlab.FitStyle
+
+.. autoclass:: pemlab.LayoutStyle
+
 .. autoclass:: pemlab.fit.FitResult
    :members:
 

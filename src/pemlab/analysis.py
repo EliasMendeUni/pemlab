@@ -15,6 +15,7 @@ from pemlab.latex import (
     mean_result_to_tex,
     name_to_tex,
 )
+from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
 from pemlab.plotting import make_data_figure, make_fit_figure, quantity_to_mathtext
 from pemlab.stats import MeanResult, mean_of
 
@@ -39,35 +40,66 @@ def _fit_section(function, data: PlotData, result: FitResult) -> str:
 
 
 class Analysis:
-    """Plots and fits for one csv table (a path or an EditCsv)."""
+    """Plots and fits for one csv table (a path or an EditCsv).
+
+    `points`, `fit` and `layout` are the looks of all plots of this analysis (see `PointStyle`,
+    `FitStyle`, `LayoutStyle`); the same arguments of a single plot override them one by one.
+    What is not given anywhere uses the defaults of the style classes.
+    """
 
     def __init__(
         self,
         source: str | Path | EditCsv,
         register: Callable[[Artifact], None] | None = None,
+        points: PointStyle | None = None,
+        fit: FitStyle | None = None,
+        layout: LayoutStyle | None = None,
     ):
         self.table = source if isinstance(source, EditCsv) else EditCsv(source)
         self._register = register
+        self.points = points
+        self.fit = fit
+        self.layout = layout
 
     def make_PlotData(self, x: str, y: str, y_sigma: str | None = None) -> PlotData:
         """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]")."""
         sigma = None if y_sigma is None else (y_sigma, self.table.column(y_sigma))
         return PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
 
-    def plot_data(self, name: str, data: PlotData, caption: str | None = None) -> None:
-        self._add_plot(name, make_data_figure(data), data, caption, notes=[])
+    def plot_data(
+        self,
+        name: str,
+        data: PlotData,
+        caption: str | None = None,
+        points: PointStyle | None = None,
+        layout: LayoutStyle | None = None,
+    ) -> None:
+        points, layout = points or self.points, layout or self.layout
+        figure = make_data_figure(data, points, layout)
+        self._add_plot(name, figure, data, caption, [], layout)
 
     def regression(
-        self, name: str, function, data: PlotData, p0=None, caption: str | None = None
+        self,
+        name: str,
+        function,
+        data: PlotData,
+        p0=None,
+        caption: str | None = None,
+        points: PointStyle | None = None,
+        fit: FitStyle | None = None,
+        layout: LayoutStyle | None = None,
     ) -> FitResult:
         """Fit `function(x, *parameters)` to the data and add the plot with the results."""
+        points, fit = points or self.points, fit or self.fit
+        layout = layout or self.layout
         sigma = None if data.y_sigma is None else data.y_sigma[1]
         result = fit_function(function, data.x[1], data.y[1], sigma, p0)
         print(result.summary())
 
         formula_text = fit_expression_text(function, quantity_to_mathtext(data.x[0]))
-        figure = make_fit_figure(data, function, result, formula_text)
-        self._add_plot(name, figure, data, caption, [_fit_section(function, data, result)])
+        figure = make_fit_figure(data, function, result, formula_text, points, fit, layout)
+        notes = [_fit_section(function, data, result)]
+        self._add_plot(name, figure, data, caption, notes, layout)
         return result
 
     def mean(
@@ -98,10 +130,13 @@ class Analysis:
         self._publish(MeanArtifact(name, tex))
         return result
 
-    def _add_plot(self, name, figure, data: PlotData, caption, notes: list[str]) -> None:
+    def _add_plot(
+        self, name, figure, data: PlotData, caption, notes: list[str], layout: LayoutStyle | None
+    ) -> None:
         calculations = collect_calculations(self.table.calculations, _used_columns(data))
         notes = [*notes, calculations_section_to_tex(calculations)]
-        self._publish(PlotArtifact(name, figure, caption or _default_caption(data), notes))
+        caption = caption or _default_caption(data)
+        self._publish(PlotArtifact(name, figure, caption, notes, (layout or LayoutStyle()).png_dpi))
 
     def _publish(self, artifact: Artifact) -> None:
         if self._register is not None:

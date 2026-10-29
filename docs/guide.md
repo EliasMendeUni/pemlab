@@ -159,6 +159,35 @@ nonlinear functions pass start values with `p0=[...]`.
 The result of `regression` is a {class}`~pemlab.fit.FitResult` with the parameters, their
 uncertainties and chi-squared per degree of freedom. The same numbers are in the LaTeX output.
 
+## Look of the plots
+
+Three small classes set how a plot looks. Every field has a default, so you only name what you
+want to change:
+
+- {class}`~pemlab.PointStyle`: measured points and error bars (marker, size, color, alpha, ...)
+- {class}`~pemlab.FitStyle`: the fit curve (color, line width, line style, label); only plots with
+  a fit use it
+- {class}`~pemlab.LayoutStyle`: figure and axes (size, labels, title, log scales, limits, grid,
+  legend, font size, png resolution)
+
+```python
+from pemlab import FitStyle, LayoutStyle, PointStyle
+
+points = PointStyle(marker_size=2, marker_alpha=0.5)
+log_x = LayoutStyle(xscale="log", figsize=(6, 3.5))
+
+analysis.regression("ohms_law", ohm, data, points=points, layout=log_x)  # one plot
+lab = Project("data/_build", points=points)  # all plots of the project
+```
+
+`Project` and `Analysis` take the same three arguments as a default for all their plots. An
+argument of a single plot replaces that one part and leaves the others as they are. So you can
+keep the points of the project and change only the layout of one plot. `plot_data` takes
+`points` and `layout` (it has no fit curve).
+
+`None` means automatic: axis labels come from the column names, colors from matplotlib's color
+cycle. Make a changed copy of a style with `dataclasses.replace(log_x, grid=False)`.
+
 ## Mean of a series
 
 {meth}`~pemlab.Analysis.mean` gives the mean of a column with its spread and uncertainty:
