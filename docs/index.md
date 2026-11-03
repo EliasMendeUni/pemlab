@@ -7,7 +7,9 @@
 
 installation
 guide
-tutorial
+examples/01_data_and_calculations
+examples/02_plots_and_fits
+examples/03_instruments
 instruments
 api
 ```

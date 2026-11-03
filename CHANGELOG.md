@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- `pemlab.instruments`: `Sweep`, `LinSweep`, `LogSweep`, `Timed` (measure inside a `with` block,
+  Ctrl+C ends cleanly, csv written row by row), `LivePlot` (updated during the measurement, same
+  `PointStyle`/`LayoutStyle`) and `AFG1022` (Tektronix function generator)
 - Project skeleton (src layout, pyproject.toml, MIT license)
 - `Project`: one build folder for everything, `build()` rebuilds it from scratch
 - `EditCsv`: add, replace and round columns from formulas; every calculation is recorded

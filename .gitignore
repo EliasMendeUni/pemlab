@@ -22,3 +22,9 @@ dist/
 *.fdb_latexmk
 *.bbl
 *.blg
+
+# copied from examples/ by docs/conf.py
+docs/examples/
+examples/pemlab_build/
+examples/data/highpass.csv
+examples/data/interrupted.csv

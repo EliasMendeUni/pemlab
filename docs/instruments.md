@@ -165,3 +165,24 @@ print(result.summary())
 `fit_exponential` fits $U(t) = U_\infty + (U_0 - U_\infty)\,e^{-t/\tau}$ to the points from
 `t_start` on, and `U_0` is the value at `t_start`. Without a start time it uses the first point.
 The model is also available as `exponential` for `analysis.regression(...)`.
+
+## Sweeps with live plot
+
+`LogSweep`, `LinSweep` and `Timed` are context managers. You write the loop yourself, `sweep.add`
+stores a row (first the loop value, then your measured values) and writes it to the csv file
+immediately. Ctrl+C ends the measurement cleanly, the code after the block still runs.
+
+```python
+from pemlab import LayoutStyle
+from pemlab.instruments import AFG1022, LivePlot, LogSweep
+
+with LogSweep(10, 20_000, 60, columns=["f [Hz]", "U_e [V]", "U_a [V]"],
+              save="data/measurements/hp.csv") as sweep:
+    plot = LivePlot(sweep, x="f [Hz]", y=lambda r: r["U_a [V]"] / r["U_e [V]"],
+                    layout=LayoutStyle(xscale="log", ylabel="|H|"))
+    for f in sweep:
+        awg.set_frequency(f)
+        sweep.wait(0.3)
+        sweep.add(u_e(), u_a())
+plot.show()
+```

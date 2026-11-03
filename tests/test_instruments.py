@@ -285,3 +285,59 @@ def test_fit_exponential_recovers_the_parameters():
     assert dict(zip(rising.parameter_names, rising.values, strict=True))["tau"] == pytest.approx(
         0.5, abs=1e-3
     )
+
+
+def test_afg1022_commands():
+    from pemlab.instruments import AFG1022
+
+    resource = FakeResource()
+    awg = AFG1022(resource)
+    awg.settings("sine", frequency=500, amplitude=1)
+    awg.set_frequency(700)
+    with awg.output():
+        pass
+    assert "SOURce1:FUNCtion:SHAPe SINusoid" in resource.written
+    assert "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 1Vpp" in resource.written
+    assert resource.written[-3:] == [
+        "SOURce1:FREQuency:FIXed 700Hz",
+        "OUTPut1:STATe ON",
+        "OUTPut1:STATe OFF",
+    ]
+
+
+def test_sweep_saves_row_by_row_and_survives_ctrl_c(tmp_path):
+    from pemlab.instruments import LogSweep
+
+    path = tmp_path / "sub" / "h.csv"
+    with LogSweep(1, 100, 3, columns=["f [Hz]", "U [V]"], save=path) as sweep:
+        for f in sweep:
+            sweep.add(2 * f)
+            if f > 5:
+                raise KeyboardInterrupt
+    assert sweep.interrupted
+    assert len(sweep.log) == 2
+    assert path.read_text(encoding="utf-8").splitlines() == ["f [Hz],U [V]", "1,2", "10,20"]
+
+
+def test_timed_uses_real_time_and_stops_after_duration():
+    from pemlab.instruments import Timed
+
+    with Timed(0.02, columns=["t [s]", "x"], duration=0.06) as run:
+        for _ in run:
+            run.add(1.0)
+    assert len(run.log) == 4
+    assert run.log.rows[-1][0] >= 0.06
+
+
+def test_live_plot_follows_the_rows():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from pemlab.instruments import LinSweep, LivePlot
+
+    with LinSweep(1, 3, 3, columns=["f [Hz]", "U_e [V]", "U_a [V]"]) as sweep:
+        plot = LivePlot(sweep, x="f [Hz]", y=lambda r: r["U_a [V]"] / r["U_e [V]"])
+        for f in sweep:
+            sweep.add(2.0, f)
+    assert list(plot.line.get_xdata()) == [1, 2, 3]
+    assert list(plot.line.get_ydata()) == [0.5, 1.0, 1.5]

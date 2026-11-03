@@ -1,5 +1,8 @@
 """Sphinx configuration for the pemlab documentation."""
 
+import shutil
+from pathlib import Path
+
 import pemlab
 
 project = "pemlab"
@@ -17,10 +20,17 @@ extensions = [
 html_theme = "furo"
 html_title = "pemlab"
 
-# The tutorial notebook is executed locally; its stored outputs are shown as they are.
+# The example notebooks are executed locally; its stored outputs are shown as they are.
 nb_execution_mode = "off"
 myst_enable_extensions = ["colon_fence", "dollarmath"]
 
 autodoc_member_order = "bysource"
 
-exclude_patterns = ["_build", "pemlab_build", "**/.ipynb_checkpoints"]
+# The notebooks live in ../examples (so they can be run from there). They are copied next to the
+# docs on every build, a symlink would not survive a checkout on Windows.
+_examples = Path(__file__).parent.parent / "examples"
+_target = Path(__file__).parent / "examples"
+shutil.rmtree(_target, ignore_errors=True)
+shutil.copytree(_examples, _target, ignore=shutil.ignore_patterns("pemlab_build", ".ipynb_checkpoints"))
+
+exclude_patterns = ["_build", "pemlab_build", "**/.ipynb_checkpoints", "examples/data"]

@@ -10,14 +10,22 @@ from .dmm import (
     measure_voltage,
     pt100_temperature,
 )
-from .generator import FunctionGenerator
+from .generator import AFG1022, FunctionGenerator
+from .live import LivePlot
 from .log import MeasurementLog
 from .scope import Oscilloscope
 from .series import measure_repeated, measure_series, measure_timeseries
 from .signals import edge_duration, edge_times, find_peak
 from .source import PowerSupply
+from .sweep import LinSweep, LogSweep, Sweep, Timed
 
 __all__ = [
+    "AFG1022",
+    "LinSweep",
+    "LivePlot",
+    "LogSweep",
+    "Sweep",
+    "Timed",
     "FunctionGenerator",
     "MeasurementLog",
     "Oscilloscope",

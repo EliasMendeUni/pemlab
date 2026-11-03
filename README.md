@@ -74,7 +74,7 @@ Then include the result in your report:
 
 ## Documentation
 
-The documentation with a complete tutorial is at
+The documentation with example notebooks is at
 <https://eliasmendeuni.github.io/pemlab/>.
 
 ## Status

@@ -1,6 +1,6 @@
 # User guide
 
-This page explains the ideas behind pemlab. The {doc}`tutorial` shows them in action.
+This page explains the ideas behind pemlab. The notebooks {doc}`examples/01_data_and_calculations` and {doc}`examples/02_plots_and_fits` show them in action.
 
 ## The workflow
 
