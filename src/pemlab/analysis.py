@@ -1,5 +1,7 @@
 """Analysis of csv data: plots and regressions that end up in the build folder."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from pathlib import Path
 

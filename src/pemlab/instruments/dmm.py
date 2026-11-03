@@ -3,6 +3,8 @@
 The commands follow the Rigol DM3000 series (SCPI).
 """
 
+from __future__ import annotations
+
 from math import sqrt
 
 # Callendar-Van Dusen coefficients of platinum resistance thermometers (IEC 60751)

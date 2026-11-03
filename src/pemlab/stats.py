@@ -1,5 +1,7 @@
 """Mean of a measurement series with its spread and uncertainty."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import numpy as np

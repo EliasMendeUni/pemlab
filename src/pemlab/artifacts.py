@@ -1,5 +1,7 @@
 """Things Project.build() writes into the build folder (one folder per artifact)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Protocol
 

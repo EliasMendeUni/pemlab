@@ -1,5 +1,7 @@
 """Measure a whole series: set a value, wait, measure, repeat."""
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable, Iterable
 
@@ -68,7 +70,7 @@ def measure_timeseries(
 
 
 def _as_tuple(result) -> tuple:
-    return tuple(result) if isinstance(result, tuple | list) else (result,)
+    return tuple(result) if isinstance(result, (tuple, list)) else (result,)
 
 
 def measure_repeated(measure: Callable[[], float], n: int = 10, wait: float = 0.0) -> list[float]:

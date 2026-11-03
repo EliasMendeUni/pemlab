@@ -1,5 +1,7 @@
 """Project: collects csv edits, plots and tables and writes them to one build folder."""
 
+from __future__ import annotations
+
 import os
 import shutil
 import stat

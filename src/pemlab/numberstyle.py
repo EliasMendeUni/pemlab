@@ -3,6 +3,8 @@
 Only the display is rounded. The csv files and all calculations keep the full values.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from math import floor, isfinite, log10

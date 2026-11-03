@@ -5,6 +5,8 @@ names come from the columns, colors from matplotlib's color cycle. `dataclasses.
 grid=False)` makes a changed copy of a style.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 

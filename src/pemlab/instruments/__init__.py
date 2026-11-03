@@ -1,5 +1,7 @@
 """Helpers for measurements with pyvisa (install with: pip install "pemlab[instruments]")."""
 
+from __future__ import annotations
+
 from pemlab.fit import exponential, fit_exponential
 
 from .discovery import find_instruments

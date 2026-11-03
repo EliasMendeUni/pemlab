@@ -1,6 +1,6 @@
 # Installation
 
-pemlab needs **Python 3.10 or newer**. It is not on PyPI, you install it from GitHub.
+pemlab needs **Python 3.8 or newer**. (Table export with `csvtex` needs 3.9; on 3.8 install it with `pip install --no-deps csvtex`.) It is not on PyPI, you install it from GitHub.
 
 ## For your lab reports
 

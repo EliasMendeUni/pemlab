@@ -1,5 +1,7 @@
 """Measure inside a `with` block: you write the loop body, the sweep takes care of the rest."""
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
@@ -45,7 +47,7 @@ class Sweep:
         self._callbacks: list[Callable[[Sweep], None]] = []
         self._live: list = []  # live plots, so `wait` can keep their windows responsive
 
-    def __enter__(self) -> "Sweep":
+    def __enter__(self) -> Sweep:
         self.interrupted = False
         if self.save_path is not None:
             self.save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,12 +75,12 @@ class Sweep:
             with self.save_path.open("a", encoding="utf-8") as file:
                 file.write(line + "\n")
         if self.verbose:
-            pairs = zip(self.log.columns, self.log.rows[-1], strict=True)
+            pairs = zip(self.log.columns, self.log.rows[-1])
             print(" | ".join(f"{c}: {v:.6g}" for c, v in pairs))
         for callback in self._callbacks:
             callback(self)
 
-    def on_row(self, callback: Callable[["Sweep"], None]) -> None:
+    def on_row(self, callback: Callable[[Sweep], None]) -> None:
         """Call `callback(sweep)` after every `add`, for your own live displays."""
         self._callbacks.append(callback)
 
@@ -93,7 +95,7 @@ class Sweep:
 
     def rows_as_dicts(self) -> list[dict[str, np.float64]]:
         columns = self.log.columns
-        return [dict(zip(columns, map(np.float64, row), strict=True)) for row in self.log.rows]
+        return [dict(zip(columns, map(np.float64, row))) for row in self.log.rows]
 
 
 class LinSweep(Sweep):

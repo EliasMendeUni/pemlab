@@ -1,5 +1,7 @@
 """A table of measured values that is saved as csv file for lab.edit_csv(...)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
@@ -16,10 +18,10 @@ class MeasurementLog:
         self.rows: list[tuple[float, ...]] = []
 
     @classmethod
-    def from_arrays(cls, columns: list[str], *arrays: np.ndarray) -> "MeasurementLog":
+    def from_arrays(cls, columns: list[str], *arrays: np.ndarray) -> MeasurementLog:
         """A log from whole columns, e.g. a scope trace: from_arrays(["t [s]", "U [V]"], t, u)."""
         log = cls(*columns)
-        for row in zip(*arrays, strict=True):
+        for row in zip(*arrays):
             log.add(*row)
         return log
 

@@ -1,5 +1,7 @@
 """Least-squares fit of a function to measurement data."""
 
+from __future__ import annotations
+
 import inspect
 from dataclasses import dataclass
 
@@ -23,11 +25,11 @@ class FitResult:
     def formatted(self, numbers: NumberStyle | None = None) -> list[tuple[str, str, str]]:
         """(name, value, error) as rounded strings; `values` and `errors` stay exact."""
         numbers = numbers or NumberStyle()
-        rows = zip(self.parameter_names, self.values, self.errors, strict=True)
+        rows = zip(self.parameter_names, self.values, self.errors)
         return [(name, *numbers.value_error(value, error)) for name, value, error in rows]
 
     def parameters_text(self) -> str:
-        pairs = zip(self.parameter_names, self.values, strict=True)
+        pairs = zip(self.parameter_names, self.values)
         return ", ".join(f"{name}={value:.3g}" for name, value in pairs)
 
     def summary(self, numbers: NumberStyle | None = None) -> str:

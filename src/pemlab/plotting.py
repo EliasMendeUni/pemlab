@@ -1,5 +1,7 @@
 """Figures for measurement data and fits (they only create the figure)."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes

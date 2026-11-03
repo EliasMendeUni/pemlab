@@ -22,7 +22,7 @@ one build folder, which you include in your report with `\input`.
 
 ## Installation
 
-pemlab needs Python 3.10 or newer. A fresh environment is recommended:
+pemlab needs Python 3.8 or newer. A fresh environment is recommended:
 
 ```bash
 conda create -n praktikum python=3.13

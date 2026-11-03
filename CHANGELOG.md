@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Runs on Python 3.8 (branch `python38`): `csvtex` is only needed for table export and only installed from 3.9 on
+
 ### Added
 - `pemlab.instruments`: `Sweep`, `LinSweep`, `LogSweep`, `Timed` (measure inside a `with` block,
   Ctrl+C ends cleanly, csv written row by row), `LivePlot` (updated during the measurement, same

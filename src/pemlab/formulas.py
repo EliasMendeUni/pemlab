@@ -1,5 +1,7 @@
 """Formulas: analytic (sympy) evaluation and error propagation, fit function expressions."""
 
+from __future__ import annotations
+
 import inspect
 import re
 
@@ -105,7 +107,7 @@ def _return_expression(function) -> str | None:
     for line in reversed(lines):
         line = line.strip()
         if line.startswith("return "):
-            return line.removeprefix("return ")
+            return line[len("return "):]
     return None
 
 

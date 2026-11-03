@@ -1,5 +1,7 @@
 """Power supply (commands of the Rigol DP800 series)."""
 
+from __future__ import annotations
+
 from collections.abc import Iterator
 from contextlib import contextmanager
 

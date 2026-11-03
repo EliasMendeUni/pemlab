@@ -4,6 +4,8 @@ Needs in the report: graphicx, booktabs, siunitx, float (the floats use [H], so 
 exactly where they are \\input).
 """
 
+from __future__ import annotations
+
 import re
 
 from pemlab.calculation import Calculation
@@ -166,7 +168,7 @@ def table_float_to_tex(
     body = [
         " & ".join(
             number_cell_to_tex(cell, style, flag)
-            for cell, style, flag in zip(row, styles, is_computed, strict=True)
+            for cell, style, flag in zip(row, styles, is_computed)
         )
         + r" \\"
         for row in rows

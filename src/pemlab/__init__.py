@@ -1,5 +1,7 @@
 """pemlab: tools for measurement data analysis and lab reports."""
 
+from __future__ import annotations
+
 __version__ = "0.1.0"
 
 from .analysis import Analysis

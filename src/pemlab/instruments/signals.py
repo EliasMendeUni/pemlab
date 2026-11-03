@@ -1,5 +1,7 @@
 """Evaluate a recorded signal: edges, rise time and the maximum of a curve."""
 
+from __future__ import annotations
+
 import numpy as np
 
 

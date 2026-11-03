@@ -1,5 +1,7 @@
 """Csv data: reading, editing with documented calculations, LaTeX tables."""
 
+from __future__ import annotations
+
 import keyword
 import re
 from dataclasses import asdict, dataclass
@@ -7,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from csvtex import create_latex_table, save_latex_table
 
 from pemlab.calculation import (
     Calculation,
@@ -135,6 +136,17 @@ def table_tex(
     )
 
 
+def _csvtex():
+    """csvtex needs pandas >= 2.2 (Python >= 3.9), so it is only imported when a table is made."""
+    try:
+        import csvtex
+    except ImportError as error:
+        raise ImportError(
+            "csvtex is missing (needs Python >= 3.9). With Python 3.8: pip install --no-deps csvtex"
+        ) from error
+    return csvtex
+
+
 class LatexConverter:
     def __init__(self, build_folder: str | Path):
         self.build_path = Path(build_folder)
@@ -142,7 +154,7 @@ class LatexConverter:
     def table_from_file(self, input_path: str | Path) -> str:
         input_path = Path(input_path)
         name = input_path.stem  # "data/table.csv" -> "table"
-        return create_latex_table(input_path, caption=name, label=f"tab:{name}")
+        return _csvtex().create_latex_table(input_path, caption=name, label=f"tab:{name}")
 
     def save_table_to_file(self, table: str, input_path: str | Path, output_folder: str | Path):
         input_path = Path(input_path)
@@ -152,7 +164,7 @@ class LatexConverter:
         name = input_path.stem
         output_path = output_folder / f"{name}.tex"
         output_path.unlink(missing_ok=True)
-        save_latex_table(table, output_path)
+        _csvtex().save_latex_table(table, output_path)
 
     def build_table_from_file(self, input_path: str | Path):
         table = self.table_from_file(Path(input_path))
@@ -204,7 +216,7 @@ class EditCsv:
         numbers: NumberStyle | None = None,
         show: bool = False,
         **columns: str,
-    ) -> "EditCsv":
+    ) -> EditCsv:
         """New column from a formula. The variables are the names of columns:
 
             add_column("P [W]", "U * I")           # the columns "U [V]" and "I [A]"
@@ -225,7 +237,7 @@ class EditCsv:
 
     def set_column(
         self, name: str, values, *, numbers: NumberStyle | None = None
-    ) -> "EditCsv":
+    ) -> EditCsv:
         """New column (or overwrite one) from values you computed yourself, e.g. fit results.
 
             set_column("1/tau [1/s]", [1 / r.values[2] for r in results])
@@ -249,7 +261,7 @@ class EditCsv:
         numbers: NumberStyle | None = None,
         show: bool = False,
         **columns: str,
-    ) -> "EditCsv":
+    ) -> EditCsv:
         """Change a column in place (same position, no new column; the raw csv is untouched).
 
             replace_column("I [mA]", "I [A]", "I * 1e-3")
@@ -284,7 +296,7 @@ class EditCsv:
         numbers: NumberStyle | None = None,
         show: bool = False,
         **columns: str,
-    ) -> "EditCsv":
+    ) -> EditCsv:
         """New column with the Gaussian error propagation of `formula`.
 
             add_uncertainty("sigma_P [W]", "U * I", {"U": 0.01, "I": "sigma_I [A]"})

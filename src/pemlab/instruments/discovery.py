@@ -1,5 +1,7 @@
 """Find the connected VISA instruments and print the code to open them."""
 
+from __future__ import annotations
+
 import re
 
 _TYPES = {
@@ -46,7 +48,7 @@ def instruments_to_text(found: list[tuple[str, str | None]]) -> str:
     if wrappers:
         code.append("from pemlab.instruments import " + ", ".join(wrappers))
     code += ["", "rm = pyvisa.ResourceManager()", ""]
-    for (address, idn), name, kind in zip(found, names, kinds, strict=True):
+    for (address, idn), name, kind in zip(found, names, kinds):
         opened = f"rm.open_resource({name}_add)"
         wrapper = _WRAPPERS.get(kind)
         code += [

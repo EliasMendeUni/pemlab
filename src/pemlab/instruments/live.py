@@ -1,8 +1,10 @@
 """A plot that is updated while the measurement runs."""
 
+from __future__ import annotations
+
 import warnings
-from collections.abc import Callable
 from pathlib import Path
+from typing import Callable, Union
 
 import matplotlib.pyplot as plt
 
@@ -10,7 +12,7 @@ from pemlab.instruments.sweep import Sweep
 from pemlab.plotstyle import LayoutStyle, PointStyle
 from pemlab.plotting import _font_context, name_to_mathtext
 
-Quantity = str | Callable[[dict], float]
+Quantity = Union[str, Callable[[dict], float]]
 
 
 class LivePlot:
