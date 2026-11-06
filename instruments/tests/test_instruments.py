@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pytest
 
-from pemlab.instruments import (
+from pemlab_instruments import (
     FunctionGenerator,
     MeasurementLog,
     Oscilloscope,
@@ -14,7 +14,6 @@ from pemlab.instruments import (
     edge_times,
     find_instruments,
     find_peak,
-    fit_exponential,
     measure_current,
     measure_repeated,
     measure_resistance,
@@ -24,7 +23,7 @@ from pemlab.instruments import (
     measure_voltage,
     pt100_temperature,
 )
-from pemlab.instruments.discovery import device_type, variable_names
+from pemlab_instruments.discovery import device_type, variable_names
 
 
 class FakeResource:
@@ -90,7 +89,7 @@ def test_find_instruments_prints_code(capsys):
     assert "dmm_1_add = 'TCPIP::141.48.16.191::INSTR'" in out
     assert "dmm_1 = rm.open_resource(dmm_1_add)" in out
     assert "source_1 = PowerSupply(rm.open_resource(source_1_add))" in out
-    assert "from pemlab.instruments import PowerSupply" in out
+    assert "from pemlab_instruments import PowerSupply" in out
     assert "no answer" in out  # the port that could not be opened
     assert manager.devices["TCPIP::141.48.16.191::INSTR"].closed
 
@@ -273,22 +272,8 @@ def test_find_peak_refines_between_the_samples():
     assert find_peak(x, x) == pytest.approx((5.0, 5.0))  # maximum at the edge: the sample
 
 
-def test_fit_exponential_recovers_the_parameters():
-    t = np.linspace(-1, 5, 300)
-    u = 1.0 + 4.0 * np.exp(-np.clip(t, 0, None) / 0.8)  # discharging starts at t=0
-    result = fit_exponential(t, u, t_start=0)
-    values = dict(zip(result.parameter_names, result.values, strict=True))
-    assert values["U_0"] == pytest.approx(5.0, abs=1e-3)
-    assert values["U_inf"] == pytest.approx(1.0, abs=1e-3)
-    assert values["tau"] == pytest.approx(0.8, abs=1e-3)
-    rising = fit_exponential(t[t >= 0], 2.0 - 2.0 * np.exp(-t[t >= 0] / 0.5))
-    assert dict(zip(rising.parameter_names, rising.values, strict=True))["tau"] == pytest.approx(
-        0.5, abs=1e-3
-    )
-
-
 def test_afg1022_commands():
-    from pemlab.instruments import AFG1022
+    from pemlab_instruments import AFG1022
 
     resource = FakeResource()
     awg = AFG1022(resource)
@@ -306,7 +291,7 @@ def test_afg1022_commands():
 
 
 def test_sweep_saves_row_by_row_and_survives_ctrl_c(tmp_path):
-    from pemlab.instruments import LogSweep
+    from pemlab_instruments import LogSweep
 
     path = tmp_path / "sub" / "h.csv"
     with LogSweep(1, 100, 3, columns=["f [Hz]", "U [V]"], save=path) as sweep:
@@ -320,7 +305,7 @@ def test_sweep_saves_row_by_row_and_survives_ctrl_c(tmp_path):
 
 
 def test_timed_uses_real_time_and_stops_after_duration():
-    from pemlab.instruments import Timed
+    from pemlab_instruments import Timed
 
     with Timed(0.02, columns=["t [s]", "x"], duration=0.06) as run:
         for _ in run:
@@ -333,7 +318,7 @@ def test_live_plot_follows_the_rows():
     import matplotlib
 
     matplotlib.use("Agg")
-    from pemlab.instruments import LinSweep, LivePlot
+    from pemlab_instruments import LinSweep, LivePlot
 
     with LinSweep(1, 3, 3, columns=["f [Hz]", "U_e [V]", "U_a [V]"]) as sweep:
         plot = LivePlot(sweep, x="f [Hz]", y=lambda r: r["U_a [V]"] / r["U_e [V]"])

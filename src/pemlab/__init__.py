@@ -7,6 +7,7 @@ from .data import EditCsv, LatexConverter
 from .numberstyle import NumberStyle
 from .plotstyle import FitStyle, LayoutStyle, PointStyle
 from .project import Project
+from .visualize import Regression, Visualize
 
 __all__ = [
     "Analysis",
@@ -17,4 +18,6 @@ __all__ = [
     "NumberStyle",
     "PointStyle",
     "Project",
+    "Regression",
+    "Visualize",
 ]

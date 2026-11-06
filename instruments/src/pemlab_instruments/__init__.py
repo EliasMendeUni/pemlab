@@ -1,6 +1,8 @@
-"""Helpers for measurements with pyvisa (install with: pip install "pemlab[instruments]")."""
+"""pemlab-instruments: measure with pyvisa instruments, live plots and csv files for pemlab."""
 
-from pemlab.fit import exponential, fit_exponential
+from __future__ import annotations
+
+__version__ = "0.1.0"
 
 from .discovery import find_instruments
 from .dmm import (
@@ -11,7 +13,7 @@ from .dmm import (
     pt100_temperature,
 )
 from .generator import AFG1022, FunctionGenerator
-from .live import LivePlot
+from .live import LivePlot, LiveStyle
 from .log import MeasurementLog
 from .scope import Oscilloscope
 from .series import measure_repeated, measure_series, measure_timeseries
@@ -23,6 +25,8 @@ __all__ = [
     "AFG1022",
     "LinSweep",
     "LivePlot",
+    "LiveStyle",
+    "LiveStyle",
     "LogSweep",
     "Sweep",
     "Timed",
@@ -32,10 +36,8 @@ __all__ = [
     "PowerSupply",
     "edge_duration",
     "edge_times",
-    "exponential",
     "find_instruments",
     "find_peak",
-    "fit_exponential",
     "measure_current",
     "measure_repeated",
     "measure_resistance",

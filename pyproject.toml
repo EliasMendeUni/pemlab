@@ -28,11 +28,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff", "pytest"]
-instruments = ["pyvisa", "pyvisa-py"]
 docs = ["sphinx", "furo", "myst-nb"]
 
 [tool.hatch.version]
 path = "src/pemlab/__init__.py"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

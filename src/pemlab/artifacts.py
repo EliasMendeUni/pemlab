@@ -13,6 +13,7 @@ from pemlab.numberstyle import NumberStyle
 class Artifact(Protocol):
     kind: str  # subfolder of the build folder: "data", "plots", "means", "tables"
     name: str
+    folder: str | None  # None: build/<kind>/<name>/; else build/<kind>/<folder>/ ("": none)
 
     def write(self, folder: Path, tex_folder: str) -> None:
         """Write into the empty `folder`. `tex_folder` is how LaTeX refers to that folder."""
@@ -21,6 +22,7 @@ class Artifact(Protocol):
 
 class PlotArtifact:
     kind = "plots"
+    folder = None
 
     def __init__(
         self, name: str, figure: Figure, caption: str, notes: list[str], png_dpi: int = 200
@@ -42,6 +44,7 @@ class PlotArtifact:
 
 class MeanArtifact:
     kind = "means"
+    folder = None
 
     def __init__(self, name: str, tex: str):
         self.name = name
@@ -54,12 +57,23 @@ class MeanArtifact:
 class TableArtifact:
     kind = "tables"
 
-    def __init__(self, name: str, csv_file: str | Path, numbers: NumberStyle | None = None):
+    def __init__(
+        self,
+        name: str,
+        csv_file: str | Path,
+        numbers: NumberStyle | None = None,
+        folder: str | None = None,
+    ):
+        """`folder`: where below build/tables the .tex goes, e.g. "circuits/rc" (None: its own
+        folder named like the table, "": directly in build/tables)."""
         self.name = name
         self.csv_file = Path(csv_file)
         self.numbers = numbers
+        self.folder = folder
 
     def write(self, folder: Path, tex_folder: str) -> None:
-        caption = escape_latex(f"{self.name} (raw data)")
-        table = table_tex(self.csv_file, caption, f"tab:{self.name}_raw", numbers=self.numbers)
+        path = f"{self.folder}/{self.name}" if self.folder else self.name
+        caption = escape_latex(f"{path} (raw data)")
+        label = "tab:" + path.replace("/", "_") + "_raw"
+        table = table_tex(self.csv_file, caption, label, numbers=self.numbers)
         (folder / f"{self.name}.tex").write_text(table, encoding="utf-8")

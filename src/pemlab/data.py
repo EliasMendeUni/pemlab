@@ -2,11 +2,13 @@
 
 import keyword
 import re
-from dataclasses import asdict, dataclass
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import sympy
 from csvtex import create_latex_table, save_latex_table
 
 from pemlab.calculation import (
@@ -16,8 +18,11 @@ from pemlab.calculation import (
     save_calculations,
 )
 from pemlab.formulas import (
+    _return_expression,
     column_symbol,
     evaluate,
+    function_expression,
+    function_variables,
     input_symbols,
     parse_formula,
     propagate_uncertainty,
@@ -52,10 +57,50 @@ def _distinguish_old_symbol(expression, inputs: dict[str, str], old_name: str, n
 
 
 @dataclass
+class _Formula:
+    """A calculation as given by the user: a formula text or a function (e.g. a lambda)."""
+
+    text: str  # as written, stored in the calculation file
+    variables: list[str]  # names of the inputs
+    compute: Callable[[dict], np.ndarray]  # takes {variable: values}
+    latex: str  # the expression as LaTeX
+    expression: sympy.Expr | None  # None: a function that is not a single parsable expression
+
+
+def make_formula(formula: str | Callable) -> _Formula:
+    """A formula text ("U * I") or a function (lambda U, I: U * I); arguments are the variables."""
+    if isinstance(formula, str):
+        expression = parse_formula(formula)
+        return _Formula(
+            formula,
+            input_symbols(expression),
+            lambda values: evaluate(expression, values),
+            to_latex(expression),
+            expression,
+        )
+    if not callable(formula):
+        raise TypeError(f"Formel muss Text oder Funktion sein, nicht {type(formula).__name__}")
+    variables = function_variables(formula)
+    text = _return_expression(formula) or getattr(formula, "__name__", "function")
+    expression = function_expression(formula)
+    if expression is not None and {str(s) for s in expression.free_symbols} - set(variables):
+        expression = None  # uses names that are not its arguments (constants of the script)
+    latex = to_latex(expression) if expression is not None else rf"\texttt{{{escape_latex(text)}}}"
+    return _Formula(
+        text,
+        variables,
+        lambda values: np.asarray(formula(*(values[v] for v in variables)), dtype=float),
+        latex,
+        expression,
+    )
+
+
+@dataclass
 class PlotData:
     x: tuple[str, np.ndarray]
     y: tuple[str, np.ndarray]
     y_sigma: tuple[str, np.ndarray] | None = None
+    calculations: list[Calculation] = field(default_factory=list)  # for the report
 
 
 def get_csv_data(file: str | Path) -> list[tuple[str, np.ndarray]]:
@@ -176,6 +221,7 @@ class EditCsv:
     """
 
     kind = "data"
+    folder = None
 
     def __init__(
         self, file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
@@ -199,26 +245,31 @@ class EditCsv:
     def add_column(
         self,
         name: str,
-        formula: str,
+        formula: str | Callable,
         *,
         numbers: NumberStyle | None = None,
         show: bool = False,
         **columns: str,
     ) -> "EditCsv":
-        """New column from a formula. The variables are the names of columns:
+        """New column from a function or a formula. The arguments are the names of columns::
 
-            add_column("P [W]", "U * I")           # the columns "U [V]" and "I [A]"
-            add_column("R [Ohm]", "U / I", U="U in V")   # a column with another name
+            add_column("P [W]", lambda U, I: U * I)      # the columns "U [V]" and "I [A]"
+            add_column("phi [°]", lambda dt, f: np.degrees(2 * np.pi * f * dt),
+                       dt="Delta t [s]", f="f [Hz]")      # columns with other names
+            add_column("P [W]", "U * I")                  # a formula as text works as well
 
-        `columns` assigns a column to a variable whose name is not the name of a column.
+        `columns` assigns a column to an argument whose name is not the name of a column.
+        With a function you can use numpy (`np.sin`, `np.degrees`, ...). It has to be a single
+        expression (`lambda ...: ...` or a def with a final `return`) so pemlab can write it in
+        the report; any other function is shown as its source text.
         `numbers`: how this column is shown in the table (the csv keeps all digits).
         `show`: list the calculation under "Calculations" in the report.
         """
-        expression = parse_formula(formula)
-        inputs = self._bind(expression, columns)
-        self.df[name] = evaluate(expression, self._input_values(inputs))
+        formula_ = make_formula(formula)
+        inputs = self._bind(formula_.variables, columns)
+        self.df[name] = self._compute(formula_, inputs)
         calculation = Calculation(
-            name, "column", formula, inputs, {}, to_latex(expression), show, _numbers_dict(numbers)
+            name, "column", formula_.text, inputs, {}, formula_.latex, show, _numbers_dict(numbers)
         )
         self._record(calculation)
         return self
@@ -244,7 +295,7 @@ class EditCsv:
         self,
         old_name: str,
         new_name: str,
-        formula: str,
+        formula: str | Callable,
         *,
         numbers: NumberStyle | None = None,
         show: bool = False,
@@ -259,17 +310,20 @@ class EditCsv:
         """
         if old_name not in self.df.columns:
             raise ValueError(f"Spalte '{old_name}' gibt es nicht. Vorhanden: {self._known()}")
-        expression = parse_formula(formula)
-        inputs = self._bind(expression, columns)
-        values = evaluate(expression, self._input_values(inputs))
+        formula_ = make_formula(formula)
+        inputs = self._bind(formula_.variables, columns)
+        values = self._compute(formula_, inputs)
 
         position = self.df.columns.get_loc(old_name)
         self.df = self.df.drop(columns=old_name)
         self.df.insert(position, new_name, values)
 
-        shown = _distinguish_old_symbol(expression, inputs, old_name, new_name)
+        latex = formula_.latex
+        if formula_.expression is not None:
+            shown = _distinguish_old_symbol(formula_.expression, inputs, old_name, new_name)
+            latex = to_latex(shown)
         calculation = Calculation(
-            new_name, "replacement", formula, inputs, {}, to_latex(shown), show,
+            new_name, "replacement", formula_.text, inputs, {}, latex, show,
             _numbers_dict(numbers),
         )
         self._record(calculation)
@@ -278,7 +332,7 @@ class EditCsv:
     def add_uncertainty(
         self,
         name: str,
-        formula: str,
+        formula: str | Callable,
         sigmas: dict[str, str | float],
         *,
         numbers: NumberStyle | None = None,
@@ -291,18 +345,24 @@ class EditCsv:
 
         The derivatives are computed analytically. `sigmas` gives the uncertainty of every
         variable: a number (e.g. the accuracy of a device, 0 for an exact quantity) or the name
-        of a column. `numbers`, `show` and `columns` as in add_column.
+        of a column. `numbers`, `show` and `columns` as in add_column. A function must be a single
+        expression that pemlab can differentiate (a lambda with numpy is fine).
         """
-        expression = parse_formula(formula)
-        inputs = self._bind(expression, columns)
+        formula_ = make_formula(formula)
+        if formula_.expression is None:
+            raise ValueError(
+                "Die Funktion lässt sich nicht ableiten (nur ein einzelner Ausdruck aus den "
+                "Argumenten, z. B. lambda U, I: U * I). Gib die Formel sonst als Text an."
+            )
+        inputs = self._bind(formula_.variables, columns)
         sigma_sources = self._bind_sigmas(list(inputs), sigmas)
-        propagated = propagate_uncertainty(expression)
+        propagated = propagate_uncertainty(formula_.expression)
 
         values = self._input_values(inputs)
         values.update(self._sigma_values(sigma_sources))
         self.df[name] = evaluate(propagated, values)
         calculation = Calculation(
-            name, "uncertainty", formula, inputs, sigma_sources, to_latex(propagated), show,
+            name, "uncertainty", formula_.text, inputs, sigma_sources, to_latex(propagated), show,
             _numbers_dict(numbers),
         )
         self._record(calculation)
@@ -328,11 +388,14 @@ class EditCsv:
                 found[variable] = candidates[0]
         return found
 
-    def _bind(self, expression, columns: dict[str, str]) -> dict[str, str]:
+    def _compute(self, formula: _Formula, inputs: dict[str, str]) -> np.ndarray:
+        values = formula.compute(self._input_values(inputs))
+        return np.broadcast_to(values, len(self.df)).astype(float)  # also a constant result
+
+    def _bind(self, variables: list[str], columns: dict[str, str]) -> dict[str, str]:
         """Check that the variables of the formula and the given columns fit together."""
         if "decimals" in columns:
             raise ValueError("decimals gibt es nicht mehr: numbers=NumberStyle(decimals=...)")
-        variables = input_symbols(expression)
         columns = {**self._automatic_columns(variables, columns), **columns}
         missing = [v for v in variables if v not in columns]
         unused = [v for v in columns if v not in variables]

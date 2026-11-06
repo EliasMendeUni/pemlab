@@ -172,7 +172,7 @@ def csv_file(tmp_path):
 
 
 def plot_figure(lab, name):
-    return lab._artifacts[("plots", name)].figure
+    return lab._artifacts[("plots", None, name)].figure()
 
 
 def test_project_styles_reach_the_plots(tmp_path, csv_file):

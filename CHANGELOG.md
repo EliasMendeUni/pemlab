@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Changed
+- The measurement code is its own package, `pemlab-instruments` (folder `instruments/`, import
+  `pemlab_instruments`, Python 3.8 or newer, no dependency on pemlab). `pemlab.instruments` and the
+  `instruments` extra are gone; `LivePlot` takes a `LiveStyle` instead of `PointStyle`/`LayoutStyle`;
+  `fit_exponential` is `pemlab.fit.fit_exponential`
+- `add_column`, `replace_column` and `add_uncertainty` take a function (lambda or def, numpy allowed)
+  as well as a formula text; the report shows the expression of a single-expression function
+- `Project.tables_from_folder` includes subfolders and the .tex files get the folder structure of the
+  csv files (`build/tables/<subfolder>/<name>.tex`)
+- Plots are drawn when they are written; figures are closed afterwards
+- Documentation in two parts, examples are workflow notebooks
+
+### Added
+- `Project.Visualize(name)`: any number of data sets, fits (`Analysis.make_regression`) and functions
+  in one plot
+
 ### Added
 - `pemlab.instruments`: `Sweep`, `LinSweep`, `LogSweep`, `Timed` (measure inside a `with` block,
   Ctrl+C ends cleanly, csv written row by row), `LivePlot` (updated during the measurement, same
