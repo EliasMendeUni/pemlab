@@ -23,8 +23,8 @@ dist/
 *.bbl
 *.blg
 
-# copied from examples/ by docs/conf.py
-docs/examples/
+# copied from the example folders by docs/conf.py
+docs/pemlab/examples/
+docs/instruments/examples/
 examples/pemlab_build/
-examples/data/highpass.csv
-examples/data/interrupted.csv
+instruments/examples/data/

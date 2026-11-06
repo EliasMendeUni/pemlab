@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pemlab-instruments"
+dynamic = ["version"]
+description = "Measure with pyvisa instruments (function generator, multimeters, oscilloscope), live plots and csv files for pemlab"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [{ name = "Elias Mende" }]
+keywords = ["measurement", "pyvisa", "lab", "physics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "pyvisa",
+    "pyvisa-py",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+
+[tool.hatch.version]
+path = "src/pemlab_instruments/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pemlab_instruments"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# typing.Callable/Optional/Union are needed for Python 3.8 (at runtime)
+ignore = ["UP006", "UP007", "UP035", "UP045"]

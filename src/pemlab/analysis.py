@@ -3,23 +3,15 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from pemlab.artifacts import Artifact, MeanArtifact, PlotArtifact
+from pemlab.artifacts import Artifact, MeanArtifact
 from pemlab.calculation import collect_calculations
 from pemlab.data import EditCsv, PlotData
 from pemlab.fit import FitResult, fit_function
-from pemlab.formulas import column_symbol, fit_expression_latex, fit_expression_text
-from pemlab.latex import (
-    calculations_section_to_tex,
-    column_latex,
-    fit_formula_to_tex,
-    fit_result_to_tex,
-    mean_result_to_tex,
-    name_to_tex,
-)
+from pemlab.latex import calculations_section_to_tex, mean_result_to_tex, name_to_tex
 from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
-from pemlab.plotting import make_data_figure, make_fit_figure, quantity_to_mathtext
 from pemlab.stats import MeanResult, mean_of
+from pemlab.visualize import Regression, Visualize
 
 
 def _used_columns(data: PlotData) -> list[str]:
@@ -27,19 +19,6 @@ def _used_columns(data: PlotData) -> list[str]:
     if data.y_sigma is not None:
         columns.append(data.y_sigma[0])
     return columns
-
-
-def _default_caption(data: PlotData) -> str:
-    return f"{name_to_tex(data.y[0])} vs. {name_to_tex(data.x[0])}"
-
-
-def _fit_section(function, data: PlotData, result: FitResult, numbers: NumberStyle | None) -> str:
-    formula_tex = fit_formula_to_tex(
-        data.y[0],
-        fit_expression_latex(function, column_latex(data.x[0])),
-        fit_expression_text(function, column_symbol(data.x[0])),
-    )
-    return fit_result_to_tex(result, formula_tex, numbers)
 
 
 class Analysis:
@@ -70,7 +49,29 @@ class Analysis:
     def make_PlotData(self, x: str, y: str, y_sigma: str | None = None) -> PlotData:
         """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]")."""
         sigma = None if y_sigma is None else (y_sigma, self.table.column(y_sigma))
-        return PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
+        data = PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
+        data.calculations = collect_calculations(self.table.calculations, _used_columns(data))
+        return data
+
+    def make_regression(
+        self, function, data: PlotData, p0=None, numbers: NumberStyle | None = None
+    ) -> Regression:
+        """Fit `function(x, *parameters)` to the data; `plot.add(regression)` draws it.
+
+        The result with the parameters and their uncertainties is `regression.result`.
+        """
+        numbers = numbers or self.numbers
+        sigma = None if data.y_sigma is None else data.y_sigma[1]
+        result = fit_function(function, data.x[1], data.y[1], sigma, p0)
+        print(result.summary(numbers))
+        return Regression(function, data, result, numbers)
+
+    def visualize(self, name: str, caption: str | None = None, layout: LayoutStyle | None = None):
+        """An empty `Visualize` plot with the styles of this analysis, written by `build()`."""
+        return Visualize(
+            name, caption, layout or self.layout, self.points, self.fit, self.numbers,
+            self._register,
+        )
 
     def plot_data(
         self,
@@ -79,10 +80,9 @@ class Analysis:
         caption: str | None = None,
         points: PointStyle | None = None,
         layout: LayoutStyle | None = None,
-    ) -> None:
-        points, layout = points or self.points, layout or self.layout
-        figure = make_data_figure(data, points, layout)
-        self._add_plot(name, figure, data, caption, [], layout)
+    ) -> Visualize:
+        """The measured points as one plot (for several layers in one plot use `visualize`)."""
+        return self.visualize(name, caption, layout).add(data, points=points)
 
     def regression(
         self,
@@ -97,17 +97,10 @@ class Analysis:
         numbers: NumberStyle | None = None,
     ) -> FitResult:
         """Fit `function(x, *parameters)` to the data and add the plot with the results."""
-        points, fit = points or self.points, fit or self.fit
-        layout, numbers = layout or self.layout, numbers or self.numbers
-        sigma = None if data.y_sigma is None else data.y_sigma[1]
-        result = fit_function(function, data.x[1], data.y[1], sigma, p0)
-        print(result.summary(numbers))
-
-        formula_text = fit_expression_text(function, quantity_to_mathtext(data.x[0]))
-        figure = make_fit_figure(data, function, result, formula_text, points, fit, layout)
-        notes = [_fit_section(function, data, result, numbers)]
-        self._add_plot(name, figure, data, caption, notes, layout)
-        return result
+        regression = self.make_regression(function, data, p0, numbers)
+        plot = self.visualize(name, caption, layout).add(regression, points=points, fit=fit)
+        plot._preview()
+        return regression.result
 
     def mean(
         self,
@@ -138,14 +131,6 @@ class Analysis:
         tex = mean_result_to_tex(result, column, caption, f"tab:mean_{name}", notes, numbers)
         self._publish(MeanArtifact(name, tex))
         return result
-
-    def _add_plot(
-        self, name, figure, data: PlotData, caption, notes: list[str], layout: LayoutStyle | None
-    ) -> None:
-        calculations = collect_calculations(self.table.calculations, _used_columns(data))
-        notes = [*notes, calculations_section_to_tex(calculations)]
-        caption = caption or _default_caption(data)
-        self._publish(PlotArtifact(name, figure, caption, notes, (layout or LayoutStyle()).png_dpi))
 
     def _publish(self, artifact: Artifact) -> None:
         if self._register is not None:

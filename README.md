@@ -20,6 +20,15 @@ one build folder, which you include in your report with `\input`.
 - **One build**: `lab.build()` rebuilds the whole build folder, and files you no longer need
   disappear.
 
+## Two packages
+
+- **pemlab** (this folder): the evaluation, Python 3.10 or newer.
+- **[pemlab-instruments](instruments/README.md)** (folder `instruments/`): the measurement with
+  pyvisa instruments, live plots and CSV files, Python 3.8 or newer. It is independent of pemlab,
+  so it also runs on old lab computers.
+
+The CSV files are the connection: measure with pemlab-instruments, evaluate with pemlab.
+
 ## Installation
 
 pemlab needs Python 3.10 or newer. A fresh environment is recommended:
@@ -36,6 +45,7 @@ For development (changes to the source take effect immediately):
 git clone https://github.com/EliasMendeUni/pemlab.git
 cd pemlab
 pip install -e ".[dev]"
+pip install -e "./instruments[dev]"
 ```
 
 Your LaTeX report needs these packages: `graphicx`, `booktabs`, `siunitx` and `float`.
@@ -51,8 +61,8 @@ lab = Project("build")
 U, I_mA, I, SIGMA_U = "U [V]", "I [mA]", "I [A]", "sigma_U [V]"
 
 table = lab.edit_csv("data/resistor.csv", name="resistor")        # columns U [V], I [mA]
-table.replace_column(I_mA, I, "I_mA * 1e-3", I_mA=I_mA)           # change a column in place
-table.add_uncertainty(SIGMA_U, "U", {"U": 0.01}, U=U)             # device accuracy
+table.replace_column(I_mA, I, lambda I_mA: I_mA * 1e-3)           # change a column in place
+table.add_uncertainty(SIGMA_U, lambda U: U, {"U": 0.01})          # device accuracy
 
 analysis = lab.analysis(table)
 data = analysis.make_PlotData(I, U, SIGMA_U)

@@ -1,6 +1,6 @@
 # User guide
 
-This page explains the ideas behind pemlab. The notebooks {doc}`examples/01_data_and_calculations` and {doc}`examples/02_plots_and_fits` show them in action.
+This page explains the ideas behind pemlab (the evaluation). The notebooks {doc}`examples/01_data_and_calculations` and {doc}`examples/02_plots_and_fits` show them in action. The measuring is a separate package, see {doc}`../instruments/guide`.
 
 ## The workflow
 
@@ -25,14 +25,16 @@ that your script no longer produces disappear.
 - pemlab only deletes folders that it created itself (they contain a marker file
   `.pemlab-build`) or that are empty. `Project("data")` on a folder with your own files stops
   with an error instead of deleting them.
-- Everything gets its own folder, `build/<kind>/<name>/`, and its files carry the same name:
+- Everything gets its own folder, `build/<kind>/<name>/`, and its files carry the same name.
+  The exception are the raw tables of `lab.tables_from_folder(...)`: they have the folder
+  structure of the csv files, so `data/circuits/rc.csv` becomes `build/tables/circuits/rc.tex`.
 
   ```text
   build/
     data/resistor/        resistor.csv, resistor.calc.json, resistor.tex
     plots/ohms_law/       ohms_law.pdf, ohms_law.png, ohms_law.tex
     means/R_mean/         R_mean.tex
-    tables/resistor/      resistor.tex
+    tables/               resistor.tex, circuits/rc.tex
   ```
 
 - Creating something with the same kind and name twice replaces the earlier one. Re-running a
@@ -76,33 +78,42 @@ end up in the LaTeX output.
 
 | Method | Purpose |
 | --- | --- |
-| `add_column(name, formula)` | new column from a formula |
-| `replace_column(old, new, formula)` | change a column in place |
-| `add_uncertainty(name, formula, sigmas)` | uncertainty of a formula |
+| `add_column(name, function)` | new column from a function or formula |
+| `replace_column(old, new, function)` | change a column in place |
+| `add_uncertainty(name, function, sigmas)` | uncertainty of a function |
 | `set_column(name, values)` | column from values you computed yourself (e.g. fit results) |
 
 Each takes the keyword-only options `numbers=None` and `show=False`.
 
-A formula is written like Python: `"U * I"`, `"sqrt(U**2 + I**2)"`, `"2 * pi * f"`. Available
-functions are `sqrt`, `exp`, `log`, `sin`, `cos`, `tan` and so on. The **variables** of the
-formula are the names of columns, without unit and math markup: `U` is the column `U [V]`,
-`R_x` is `$R_x$ [$k\Omega$]`. You write each name once:
+The calculation is a **function** (a `lambda` or a `def`). Its **arguments** are the columns,
+named without unit and math markup: `U` is the column `U [V]`, `R_x` is `$R_x$ [$k\Omega$]`.
+Inside you can use numpy:
 
 ```python
-table.add_column(R, "U / I")   # the columns "U [V]" and "I [A]"
+table.add_column(R, lambda U, I: U / I)                                  # "U [V]" and "I [A]"
+table.add_column(PHI, lambda dt, f: np.degrees(2 * np.pi * f * dt),      # other names:
+                 dt="$\\Delta t$ [s]", f="f [Hz]")                        # argument="column"
 ```
 
-A variable that is not the name of a column gets its column with a keyword argument, for example
-`add_column(R, "a / b", a=U, b=I)`. pemlab checks the assignment: a variable without a column,
-a name that fits several columns, a column that does not exist and an unused assignment all raise
-an error that names the problem.
+A formula as **text** works as well (`"U * I"`, `"sqrt(U**2 + I**2)"`, `"2 * pi * f"`) and means
+the same.
+
+An argument that is not the name of a column gets its column with a keyword argument, as `dt`
+and `f` above. pemlab checks the assignment: an argument without a column, a name that fits
+several columns, a column that does not exist and an unused assignment all raise an error that
+names the problem.
+
+For the report pemlab writes the function as an equation (`np.degrees(...)` becomes $\varphi =
+360\,\Delta t\,f$). That works for a single expression (a lambda, or a `def` whose last line is
+the `return`). Any other function is computed all the same, and the report shows its source text
+instead. `add_uncertainty` needs a single expression because it differentiates it.
 
 `show=True` lists a calculation under "Calculations" in the report. By default it is left out,
 because most columns are trivial steps like a unit conversion. The column is computed and
 stored either way.
 
 ```python
-table.replace_column(I_mA, I, "I * 1e-3")   # "I" is the old column "I [mA]"
+table.replace_column(I_mA, I, lambda I: I * 1e-3)   # "I" is the old column "I [mA]"
 ```
 
 `numbers` is how the column is shown in the table, see {ref}`number-style`. The stored values are
@@ -110,7 +121,7 @@ never rounded.
 
 ```{note}
 The names `name`, `formula`, `sigmas`, `numbers`, `show`, `old_name` and `new_name` belong to the
-methods and cannot be used as variable names in a formula.
+methods and cannot be used as argument names of the function.
 ```
 
 ### Uncertainties
@@ -122,12 +133,12 @@ $$\sigma_f = \sqrt{\sum_i \left(\frac{\partial f}{\partial x_i}\,\sigma_{x_i}\ri
 The derivatives are computed **analytically** (with sympy), and the resulting formula is part of
 the report.
 
-`sigmas` gives the uncertainty of **every** variable of the formula. A number is a constant (for
+`sigmas` gives the uncertainty of **every** argument of the function. A number is a constant (for
 example the accuracy of a device), a string is the name of a column with the uncertainties. Use
 `0` for quantities that are exact:
 
 ```python
-table.add_uncertainty(SIGMA_P, "U * I", {"U": 0.01, "I": SIGMA_I})
+table.add_uncertainty(SIGMA_P, lambda U, I: U * I, {"U": 0.01, "I": SIGMA_I})
 ```
 
 A missing or superfluous entry raises an error, so a typo cannot silently make a value exact.
@@ -162,6 +173,41 @@ nonlinear functions pass start values with `p0=[...]`.
 
 The result of `regression` is a {class}`~pemlab.fit.FitResult` with the parameters, their
 uncertainties and chi-squared per degree of freedom. The same numbers are in the LaTeX output.
+
+(visualize)=
+### Several data sets in one plot
+
+`plot_data` and `regression` make one plot from one data set. For more, create a
+{class}`~pemlab.Visualize` and `add` what should be in it, as often as you like:
+
+```python
+plot = lab.Visualize("amplitude", layout=LayoutStyle(xscale="log"))   # build/plots/amplitude
+
+plot.add(data_low, points=PointStyle(label="low-pass"))               # measured points
+plot.add(analysis.make_regression(highpass, data_high, p0=[500]),     # points and fit curve
+         points=PointStyle(label="high-pass"), fit=FitStyle(color="C1"))
+plot.add(lambda f: 1 / np.sqrt(2), fit=FitStyle(label="-3 dB", linestyle=":"))   # a function
+plot                                                                  # a notebook shows it
+```
+
+What you can `add`:
+
+| `plot.add(...)` | draws | looks |
+| --- | --- | --- |
+| `analysis.make_PlotData(x, y)` | measured points (error bars with `y_sigma`) | `points` |
+| `analysis.make_regression(function, data)` | the points of the data and the fit curve | `points`, `fit` |
+| a function `f(x)` (a lambda with numpy) | the curve; `x=(low, high)` sets the range | `fit` |
+
+The layers are drawn in the order they are added. Data from different tables can be mixed. The
+`layout` of the `Visualize` is the look of the whole plot. `points` and `fit` of an `add`
+replace the defaults of the project for this layer (`FitStyle(label=...)` is the legend text). Set
+a `PointStyle(label=...)` for every set of points, otherwise they are all "Messdaten" in the
+legend. The legend appears by default as soon as there is more than one layer.
+
+The fit results of all regressions and the calculations behind all columns that are used end up
+in the one LaTeX float of the plot. `regression.result` holds the parameters and uncertainties
+of a fit (`make_regression` prints them too). `analysis.plot_data(...)` and
+`analysis.regression(...)` are shortcuts for a `Visualize` with a single layer.
 
 (number-style)=
 ## Numbers in tables and results
@@ -257,7 +303,7 @@ same float, nothing moves away from its table or plot. The floats use the placem
 \input{build/data/resistor/resistor}        % edited table with its calculations
 \input{build/plots/ohms_law/ohms_law}       % plot, fit result and calculations
 \input{build/means/R_mean/R_mean}           % mean of a column
-\input{build/tables/resistor/resistor}      % table of the raw data
+\input{build/tables/resistor}               % table of the raw data (tables_from_folder)
 ```
 
 Paths are relative to the folder in which you compile the report. If your report lies in

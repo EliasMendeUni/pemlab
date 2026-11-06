@@ -1,9 +1,10 @@
 """A table of measured values that is saved as csv file for lab.edit_csv(...)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 
 class MeasurementLog:
@@ -16,10 +17,10 @@ class MeasurementLog:
         self.rows: list[tuple[float, ...]] = []
 
     @classmethod
-    def from_arrays(cls, columns: list[str], *arrays: np.ndarray) -> "MeasurementLog":
+    def from_arrays(cls, columns: list[str], *arrays: np.ndarray) -> MeasurementLog:
         """A log from whole columns, e.g. a scope trace: from_arrays(["t [s]", "U [V]"], t, u)."""
         log = cls(*columns)
-        for row in zip(*arrays, strict=True):
+        for row in zip(*arrays):
             log.add(*row)
         return log
 
@@ -29,14 +30,18 @@ class MeasurementLog:
             raise ValueError(f"{len(values)} Werte für die Spalten {self.columns}")
         self.rows.append(tuple(float(value) for value in values))
 
-    def to_dataframe(self) -> pd.DataFrame:
-        return pd.DataFrame(self.rows, columns=self.columns)
+    def to_arrays(self) -> dict[str, np.ndarray]:
+        """The columns as arrays: {"U [V]": array([...]), ...}."""
+        data = np.array(self.rows, dtype=float).reshape(len(self.rows), len(self.columns))
+        return {column: data[:, i] for i, column in enumerate(self.columns)}
 
     def save(self, path: str | Path) -> Path:
         """Write the csv file (the folder is created if needed) and return its path."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.to_dataframe().to_csv(path, index=False, float_format="%.12g")
+        lines = [",".join(self.columns)]
+        lines += [",".join(format(value, ".12g") for value in row) for row in self.rows]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return path
 
     def __len__(self) -> int:

@@ -11,6 +11,7 @@ from pemlab.artifacts import Artifact, TableArtifact
 from pemlab.data import EditCsv, column_variables_to_text
 from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
+from pemlab.visualize import Visualize as VisualizePlot
 
 _BUILD_MARKER = ".pemlab-build"
 _RMTREE_ERROR_ARGUMENT = "onexc" if sys.version_info >= (3, 12) else "onerror"
@@ -49,13 +50,16 @@ class Project:
         self.fit = fit
         self.layout = layout
         self.numbers = numbers
-        self._artifacts: dict[tuple[str, str], Artifact] = {}
+        self._artifacts: dict[tuple[str, str | None, str], Artifact] = {}
 
     def add(self, artifact: Artifact) -> None:
-        """Register an artifact; one with the same kind and name is replaced."""
+        """Register an artifact; one with the same kind, folder and name is replaced."""
         if Path(artifact.name).name != artifact.name or artifact.name in ("", ".", ".."):
             raise ValueError(f"Ungültiger Name: {artifact.name!r}")
-        self._artifacts[(artifact.kind, artifact.name)] = artifact
+        folder = getattr(artifact, "folder", None)
+        if folder is not None and (Path(folder).is_absolute() or ".." in Path(folder).parts):
+            raise ValueError(f"Ungültiger Ordner: {folder!r}")
+        self._artifacts[(artifact.kind, folder, artifact.name)] = artifact
 
     def edit_csv(
         self, file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
@@ -74,6 +78,29 @@ class Project:
             numbers=self.numbers,
         )
 
+    def Visualize(
+        self,
+        name: str,
+        caption: str | None = None,
+        layout: LayoutStyle | None = None,
+        points: PointStyle | None = None,
+        fit: FitStyle | None = None,
+    ) -> VisualizePlot:
+        """A plot to which you `add` any number of data sets, fits and functions.
+
+        It is written to the build folder by `build()`; the styles default to those of the
+        project. See `pemlab.Visualize`.
+        """
+        return VisualizePlot(
+            name,
+            caption,
+            layout or self.layout,
+            points or self.points,
+            fit or self.fit,
+            self.numbers,
+            register=self.add,
+        )
+
     def table(
         self, csv_file: str | Path, name: str | None = None, numbers: NumberStyle | None = None
     ) -> None:
@@ -81,8 +108,19 @@ class Project:
         self.add(TableArtifact(name or csv_file.stem, csv_file, numbers or self.numbers))
 
     def tables_from_folder(self, folder: str | Path, numbers: NumberStyle | None = None) -> None:
-        for csv_file in sorted(Path(folder).glob("*.csv")):
-            self.table(csv_file, numbers=numbers)
+        """A table of every csv file in `folder`, subfolders included.
+
+        The .tex files get the folder structure of the csv files:
+        `data/circuits/rc.csv` becomes `build/tables/circuits/rc.tex`.
+        """
+        folder = Path(folder)
+        build = self.build_folder.resolve()
+        for csv_file in sorted(folder.rglob("*.csv")):
+            if build in csv_file.resolve().parents:  # the copies of edited tables
+                continue
+            subfolder = csv_file.relative_to(folder).parent.as_posix()
+            subfolder = "" if subfolder == "." else subfolder
+            self.add(TableArtifact(csv_file.stem, csv_file, numbers or self.numbers, subfolder))
 
     def column_names_from_folder(self, folder: str | Path) -> None:
         """Print one Python variable per CSV column, ready to copy into your script.
@@ -114,7 +152,8 @@ class Project:
         """Empty the build folder, then write every artifact into build/<kind>/<name>/."""
         self._reset_build_folder()
         for artifact in self._artifacts.values():
-            folder = self.build_folder / artifact.kind / artifact.name
+            below = artifact.folder if artifact.folder is not None else artifact.name
+            relative = f"{artifact.kind}/{below}" if below else artifact.kind
+            folder = self.build_folder / relative
             folder.mkdir(parents=True, exist_ok=True)  # a LaTeX auto-build may have made it
-            tex_folder = f"{self.tex_prefix}/{artifact.kind}/{artifact.name}"
-            artifact.write(folder, tex_folder)
+            artifact.write(folder, f"{self.tex_prefix}/{relative}")

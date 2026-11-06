@@ -1,5 +1,7 @@
 """Find the connected VISA instruments and print the code to open them."""
 
+from __future__ import annotations
+
 import re
 
 _TYPES = {
@@ -44,9 +46,9 @@ def instruments_to_text(found: list[tuple[str, str | None]]) -> str:
 
     code = ["import pyvisa"]
     if wrappers:
-        code.append("from pemlab.instruments import " + ", ".join(wrappers))
+        code.append("from pemlab_instruments import " + ", ".join(wrappers))
     code += ["", "rm = pyvisa.ResourceManager()", ""]
-    for (address, idn), name, kind in zip(found, names, kinds, strict=True):
+    for (address, idn), name, kind in zip(found, names, kinds):
         opened = f"rm.open_resource({name}_add)"
         wrapper = _WRAPPERS.get(kind)
         code += [
@@ -80,7 +82,7 @@ def find_instruments(rm=None, timeout_ms: int = 2000) -> None:
     `rm` is an optional pyvisa ResourceManager (default: the standard backend).
     """
     if rm is None:
-        import pyvisa  # optional dependency: pip install "pemlab[instruments]"
+        import pyvisa  # optional dependency: pip install pemlab-instruments
 
         rm = pyvisa.ResourceManager()
     found = [(address, _ask_idn(rm, address, timeout_ms)) for address in rm.list_resources()]
