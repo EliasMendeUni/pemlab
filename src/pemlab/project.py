@@ -33,6 +33,9 @@ class Project:
     `FitStyle` and `LayoutStyle`); the same arguments of a single plot override them one by one.
     `numbers` (a `NumberStyle`) is how tables, fit results and means show their numbers; the
     same argument of a single call overrides it.
+
+    `raw_data_folder` is the folder with the csv files of the measurements (subfolders included).
+    `find_columns()` and `create_latex_tables_from_raw_data()` go through all of them.
     """
 
     def __init__(
@@ -43,8 +46,10 @@ class Project:
         fit: FitStyle | None = None,
         layout: LayoutStyle | None = None,
         numbers: NumberStyle | None = None,
+        raw_data_folder: str | Path | None = None,
     ):
         self.build_folder = Path(build_folder)
+        self.raw_data_folder = None if raw_data_folder is None else Path(raw_data_folder)
         self.tex_prefix = tex_prefix if tex_prefix is not None else self.build_folder.as_posix()
         self.points = points
         self.fit = fit
@@ -107,29 +112,41 @@ class Project:
         csv_file = Path(csv_file)
         self.add(TableArtifact(name or csv_file.stem, csv_file, numbers or self.numbers))
 
-    def tables_from_folder(self, folder: str | Path, numbers: NumberStyle | None = None) -> None:
-        """A table of every csv file in `folder`, subfolders included.
+    def _raw_csv_files(self, folder: str | Path | None) -> tuple[Path, list[Path]]:
+        """The folder and every csv file in it (subfolders included, not the build folder)."""
+        folder = self.raw_data_folder if folder is None else Path(folder)
+        if folder is None:
+            raise ValueError(
+                "Kein Ordner mit Messdaten: Project(..., raw_data_folder='data/measurements') "
+                "setzen oder den Ordner angeben."
+            )
+        build = self.build_folder.resolve()
+        files = [f for f in sorted(folder.rglob("*.csv")) if build not in f.resolve().parents]
+        return folder, files
+
+    def find_columns(self, folder: str | Path | None = None) -> None:
+        """Print one Python variable per csv column, ready to copy into your script.
+
+        Goes through all csv files of `raw_data_folder` (or `folder`), a header per file. Run it
+        once at the start of an analysis, paste the output into the script and delete the call
+        again, like `find_instruments()` for the measurement.
+        """
+        folder, csv_files = self._raw_csv_files(folder)
+        print(column_variables_to_text(csv_files, folder) if csv_files else f"No csv in {folder}")
+
+    def create_latex_tables_from_raw_data(
+        self, folder: str | Path | None = None, numbers: NumberStyle | None = None
+    ) -> None:
+        """A LaTeX table of every csv file in `raw_data_folder` (or `folder`), subfolders included.
 
         The .tex files get the folder structure of the csv files:
         `data/circuits/rc.csv` becomes `build/tables/circuits/rc.tex`.
         """
-        folder = Path(folder)
-        build = self.build_folder.resolve()
-        for csv_file in sorted(folder.rglob("*.csv")):
-            if build in csv_file.resolve().parents:  # the copies of edited tables
-                continue
+        folder, csv_files = self._raw_csv_files(folder)
+        for csv_file in csv_files:
             subfolder = csv_file.relative_to(folder).parent.as_posix()
             subfolder = "" if subfolder == "." else subfolder
             self.add(TableArtifact(csv_file.stem, csv_file, numbers or self.numbers, subfolder))
-
-    def column_names_from_folder(self, folder: str | Path) -> None:
-        """Print one Python variable per CSV column, ready to copy into your script.
-
-        A helper for the start of an analysis: call it once, paste the output into the script
-        and delete the call again.
-        """
-        csv_files = sorted(Path(folder).glob("*.csv"))
-        print(column_variables_to_text(csv_files) if csv_files else f"No csv files in {folder}")
 
     def _reset_build_folder(self) -> None:
         """Delete the whole build folder and create it empty again.

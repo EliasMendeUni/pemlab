@@ -138,12 +138,16 @@ def _python_string(text: str) -> str:
     return f'r"{text}"' if "\\" in text else f'"{text}"'
 
 
-def column_variables_to_text(csv_files: list[Path]) -> str:
-    """Python assignments with one variable per column, grouped by csv file."""
+def column_variables_to_text(csv_files: list[Path], root: Path | None = None) -> str:
+    """Python assignments with one variable per column, grouped by csv file.
+
+    The header of a group is the file name, or its path below `root` if given.
+    """
     used: dict[str, str] = {}  # variable name -> column name
     blocks = []
     for csv_file in csv_files:
-        lines = [f"# {csv_file.name}"]
+        title = csv_file.relative_to(root).as_posix() if root is not None else csv_file.name
+        lines = [f"# {title}"]
         for column in pd.read_csv(csv_file, nrows=0).columns:
             name = _unique_variable_name(column, csv_file.stem, used)
             used[name] = column

@@ -101,7 +101,7 @@ def test_table_shows_rounded_and_scientific(tmp_path, csv_file):
 
 def test_project_default_style_reaches_raw_tables(tmp_path, csv_file):
     lab = Project(tmp_path / "build", numbers=NumberStyle(sci_below=1e-6, decimals=2))
-    lab.tables_from_folder(csv_file.parent)
+    lab.create_latex_tables_from_raw_data(csv_file.parent)
     lab.build()
     tex = read(tmp_path / "build" / "tables" / "ohm.tex")
     assert "1.50" in tex and "0.00" in tex  # decimals=2, nothing in e-notation

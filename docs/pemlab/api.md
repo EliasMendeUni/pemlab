@@ -4,7 +4,7 @@
 
 ```{eval-rst}
 .. autoclass:: pemlab.Project
-   :members: edit_csv, analysis, Visualize, table, tables_from_folder, column_names_from_folder, build
+   :members: edit_csv, analysis, Visualize, find_columns, create_latex_tables_from_raw_data, table, build
 ```
 
 ## Editing CSV files

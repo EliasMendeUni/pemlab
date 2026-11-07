@@ -26,7 +26,7 @@ that your script no longer produces disappear.
   `.pemlab-build`) or that are empty. `Project("data")` on a folder with your own files stops
   with an error instead of deleting them.
 - Everything gets its own folder, `build/<kind>/<name>/`, and its files carry the same name.
-  The exception are the raw tables of `lab.tables_from_folder(...)`: they have the folder
+  The exception are the raw tables of `lab.create_latex_tables_from_raw_data()`: they have the folder
   structure of the csv files, so `data/circuits/rc.csv` becomes `build/tables/circuits/rc.tex`.
 
   ```text
@@ -58,14 +58,19 @@ and in the calculations.
   R = r"$R$ [\Omega]"
   ```
 
-  To save typing, `lab.column_names_from_folder("data")` prints one such variable for every
-  column of every CSV file in a folder, grouped by file. Copy the output into your script and
-  delete the call again.
+  To save typing, `lab.find_columns()` prints one such variable for every column of every CSV
+  file in the raw data folder of the project (`Project(..., raw_data_folder="data/measurements")`,
+  subfolders included), with a header per file. Run it once at the start, copy the output into
+  your script and delete the call again, like `find_instruments()` for the measurement.
 
   ```text
   # resistor.csv
   U = "U [V]"
   I = "I [mA]"
+
+  # circuits/rc.csv
+  f = "f [Hz]"
+  U_a = "$U_a$ [V]"
   ```
 
   The variable name is the column name without unit and math markup. If it is already taken by
@@ -303,7 +308,7 @@ same float, nothing moves away from its table or plot. The floats use the placem
 \input{build/data/resistor/resistor}        % edited table with its calculations
 \input{build/plots/ohms_law/ohms_law}       % plot, fit result and calculations
 \input{build/means/R_mean/R_mean}           % mean of a column
-\input{build/tables/resistor}               % table of the raw data (tables_from_folder)
+\input{build/tables/resistor}               % table of the raw data
 ```
 
 Paths are relative to the folder in which you compile the report. If your report lies in

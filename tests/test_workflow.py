@@ -180,8 +180,8 @@ def test_tables_have_the_folder_structure_of_the_csv_files(tmp_path):
     (data / "circuits" / "rc").mkdir(parents=True)
     for path in (data / "top.csv", data / "circuits" / "a.csv", data / "circuits" / "rc" / "a.csv"):
         path.write_text("U [V],I [A]\n1,2\n", encoding="utf-8")
-    lab = Project(tmp_path / "build")
-    lab.tables_from_folder(data)
+    lab = Project(tmp_path / "build", raw_data_folder=data)
+    lab.create_latex_tables_from_raw_data()
     lab.build()
     tables = tmp_path / "build" / "tables"
     found = sorted(p.relative_to(tables).as_posix() for p in tables.rglob("*.tex"))
@@ -196,6 +196,30 @@ def test_tables_from_folder_skip_the_build_folder(tmp_path):
     table = lab.edit_csv(tmp_path / "m.csv")
     lab.build()  # copies m.csv into build/data/m/
     lab2 = Project(tmp_path / "build")
-    lab2.tables_from_folder(tmp_path)
+    lab2.create_latex_tables_from_raw_data(tmp_path)
     assert len(lab2._artifacts) == 1
     assert table.name == "m"
+
+
+# --- find_columns ---
+
+
+def test_find_columns_prints_a_header_and_variables_for_every_csv(tmp_path, capsys):
+    data = tmp_path / "data"
+    (data / "rc").mkdir(parents=True)
+    (data / "a.csv").write_text("f [Hz],U_e [V]\n1,2\n", encoding="utf-8")
+    (data / "rc" / "b.csv").write_text("f [Hz],$U_a$ [V]\n1,2\n", encoding="utf-8")
+    Project(tmp_path / "build", raw_data_folder=data).find_columns()
+    out = capsys.readouterr().out
+    assert out.index("# a.csv") < out.index("# rc/b.csv")
+    assert 'U_e = "U_e [V]"' in out
+    assert 'U_a = "$U_a$ [V]"' in out
+    assert out.count('f = "f [Hz]"') == 2  # the same column keeps the same variable
+
+
+def test_raw_data_functions_need_a_folder(tmp_path):
+    lab = Project(tmp_path / "build")
+    with pytest.raises(ValueError, match="raw_data_folder"):
+        lab.find_columns()
+    with pytest.raises(ValueError, match="raw_data_folder"):
+        lab.create_latex_tables_from_raw_data()

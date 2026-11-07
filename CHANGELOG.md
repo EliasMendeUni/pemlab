@@ -9,8 +9,9 @@
   `fit_exponential` is `pemlab.fit.fit_exponential`
 - `add_column`, `replace_column` and `add_uncertainty` take a function (lambda or def, numpy allowed)
   as well as a formula text; the report shows the expression of a single-expression function
-- `Project.tables_from_folder` includes subfolders and the .tex files get the folder structure of the
-  csv files (`build/tables/<subfolder>/<name>.tex`)
+- `Project(..., raw_data_folder=...)`: `tables_from_folder` is now `create_latex_tables_from_raw_data()`,
+  it includes subfolders and the .tex files get the folder structure of the csv files
+  (`build/tables/<subfolder>/<name>.tex`); `column_names_from_folder` is now `find_columns()`
 - Plots are drawn when they are written; figures are closed afterwards
 - Documentation in two parts, examples are workflow notebooks
 
