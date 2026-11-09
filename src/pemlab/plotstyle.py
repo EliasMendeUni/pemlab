@@ -13,14 +13,14 @@ class PointStyle:
     """Measured points and their error bars."""
 
     marker: str = "o"
-    marker_size: float = 3.0  # in points
+    marker_size: float = 1.0  # in points
     marker_color: str | None = None
     marker_alpha: float = 1.0  # < 1 helps with many overlapping points
     connect_points: bool = False  # draw a line between the points
     label: str | None = "Messdaten"  # legend text; None: no legend entry
 
     # used when the data has a y uncertainty
-    capsize: float = 2.0
+    capsize: float = 1.0
     errorbar_linewidth: float = 0.8
 
     def __post_init__(self) -> None:
@@ -35,7 +35,7 @@ class FitStyle:
     """The fit curve (only used by plots with a fit)."""
 
     color: str | None = None
-    linewidth: float = 1.5
+    linewidth: float = 1
     linestyle: str = "-"
     points: int = 200  # resolution of the curve
     label: str | None = None  # None: formula and parameters
