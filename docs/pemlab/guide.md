@@ -163,6 +163,18 @@ data = analysis.make_PlotData(I, U, SIGMA_U)  # x, y, y-uncertainty
 
 The uncertainty is optional. Without it the fit is unweighted and there is no chi-squared.
 
+`x_range` and `y_range` keep only the points inside an interval `(low, high)` (both ends
+included, `None` leaves a side open). Use them to fit a part of the measurement, for example the
+slope of a filter in the stop band:
+
+```python
+flank = analysis.make_PlotData(F, A_DB, x_range=(100, 400))    # 100 Hz <= f <= 400 Hz
+top = analysis.make_PlotData(F, A_DB, y_range=(-3, None))      # only points above -3 dB
+```
+
+An error bar column (`y_sigma`) is cut along with the points. If no point is left, you get an
+error.
+
 - {meth}`~pemlab.Analysis.plot_data` plots only the measured points.
 - {meth}`~pemlab.Analysis.regression` fits a function and plots data and fit.
 

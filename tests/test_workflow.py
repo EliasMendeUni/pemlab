@@ -223,3 +223,44 @@ def test_raw_data_functions_need_a_folder(tmp_path):
         lab.find_columns()
     with pytest.raises(ValueError, match="raw_data_folder"):
         lab.create_latex_tables_from_raw_data()
+
+
+# --- make_PlotData with ranges ---
+
+
+@pytest.fixture
+def ramp(tmp_path):
+    x = np.arange(10.0)
+    frame = pd.DataFrame({"x [m]": x, "y [m]": 2 * x, "s [m]": 0.1 * x})
+    frame.to_csv(tmp_path / "ramp.csv", index=False)
+    return Project(tmp_path / "build").analysis(tmp_path / "ramp.csv")
+
+
+def test_x_range_keeps_the_points_inside_with_both_ends(ramp):
+    data = ramp.make_PlotData("x [m]", "y [m]", "s [m]", x_range=(2, 5))
+    assert list(data.x[1]) == [2, 3, 4, 5]
+    assert list(data.y[1]) == [4, 6, 8, 10]
+    assert data.y_sigma[1] == pytest.approx([0.2, 0.3, 0.4, 0.5])  # the uncertainty follows
+
+
+def test_open_side_and_y_range_combine(ramp):
+    assert list(ramp.make_PlotData("x [m]", "y [m]", x_range=(7, None)).x[1]) == [7, 8, 9]
+    assert list(ramp.make_PlotData("x [m]", "y [m]", x_range=(None, 2)).x[1]) == [0, 1, 2]
+    both = ramp.make_PlotData("x [m]", "y [m]", x_range=(2, 8), y_range=(None, 10))
+    assert list(both.x[1]) == [2, 3, 4, 5]  # y <= 10 cuts at x = 5
+
+
+def test_wrong_ranges_are_reported(ramp):
+    with pytest.raises(ValueError, match="Keine Punkte"):
+        ramp.make_PlotData("x [m]", "y [m]", x_range=(100, 200))
+    with pytest.raises(ValueError, match="größer"):
+        ramp.make_PlotData("x [m]", "y [m]", x_range=(5, 2))
+    with pytest.raises(ValueError, match="Intervall"):
+        ramp.make_PlotData("x [m]", "y [m]", x_range=(1, 2, 3))
+
+
+def test_the_fit_uses_only_the_selected_range(ramp):
+    data = ramp.make_PlotData("x [m]", "y [m]", x_range=(2, 6))
+    regression = ramp.make_regression(straight, data)
+    assert regression.result.values == pytest.approx([2.0, 0.0], abs=1e-9)
+    assert len(regression.data.x[1]) == 5

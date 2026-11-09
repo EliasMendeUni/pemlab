@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+
 from pemlab.artifacts import Artifact, MeanArtifact
 from pemlab.calculation import collect_calculations
 from pemlab.data import EditCsv, PlotData
@@ -19,6 +21,23 @@ def _used_columns(data: PlotData) -> list[str]:
     if data.y_sigma is not None:
         columns.append(data.y_sigma[0])
     return columns
+
+
+def _in_range(values: np.ndarray, interval, name: str) -> np.ndarray:
+    """True where a value is inside the interval (low, high); None means open on that side."""
+    if interval is None:
+        return np.ones(len(values), dtype=bool)
+    if len(interval) != 2:
+        raise ValueError(f"{name} ist ein Intervall (untere, obere Grenze), nicht {interval!r}.")
+    low, high = interval
+    if low is not None and high is not None and low > high:
+        raise ValueError(f"{name}: die untere Grenze {low} ist größer als die obere {high}.")
+    keep = np.ones(len(values), dtype=bool)
+    if low is not None:
+        keep &= values >= low
+    if high is not None:
+        keep &= values <= high
+    return keep
 
 
 class Analysis:
@@ -46,10 +65,29 @@ class Analysis:
         self.fit = fit
         self.layout = layout
 
-    def make_PlotData(self, x: str, y: str, y_sigma: str | None = None) -> PlotData:
-        """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]")."""
-        sigma = None if y_sigma is None else (y_sigma, self.table.column(y_sigma))
-        data = PlotData((x, self.table.column(x)), (y, self.table.column(y)), sigma)
+    def make_PlotData(
+        self,
+        x: str,
+        y: str,
+        y_sigma: str | None = None,
+        x_range: tuple[float | None, float | None] | None = None,
+        y_range: tuple[float | None, float | None] | None = None,
+    ) -> PlotData:
+        """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]").
+
+        `x_range` and `y_range` keep only the points inside the interval `(low, high)`, ends
+        included; `None` leaves that side open: `x_range=(None, 400)` is "x up to 400". Both
+        together keep the points that are in both intervals. Use it to fit only part of the
+        measurement, e.g. the slope of a filter:
+        `make_PlotData("f [Hz]", "A [dB]", x_range=(100, 400))`.
+        """
+        x_values, y_values = self.table.column(x), self.table.column(y)
+        sigma_values = None if y_sigma is None else self.table.column(y_sigma)
+        keep = _in_range(x_values, x_range, "x_range") & _in_range(y_values, y_range, "y_range")
+        if not keep.any():
+            raise ValueError(f"Keine Punkte in x_range={x_range}, y_range={y_range}.")
+        sigma = None if sigma_values is None else (y_sigma, sigma_values[keep])
+        data = PlotData((x, x_values[keep]), (y, y_values[keep]), sigma)
         data.calculations = collect_calculations(self.table.calculations, _used_columns(data))
         return data
 
