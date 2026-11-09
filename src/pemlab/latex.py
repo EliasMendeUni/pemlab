@@ -83,6 +83,9 @@ def _constant_sigmas_to_tex(calculation: Calculation) -> str:
     for symbol, value in calculation.sigmas.items():
         if isinstance(value, str):
             continue
+        if isinstance(value, dict):  # an uncertainty given as a function
+            items.append(f"${symbol_latex(f'sigma_{symbol}')} = {value['latex']}$")
+            continue
         unit = split_unit(calculation.inputs[symbol])[1]
         items.append(f"${symbol_latex(f'sigma_{symbol}')} = {quantity_to_tex(value, unit)}$")
     return f"(with {', '.join(items)})" if items else ""

@@ -338,19 +338,23 @@ class EditCsv:
         self,
         name: str,
         formula: str | Callable,
-        sigmas: dict[str, str | float],
+        sigmas: dict[str, str | float | Callable],
         *,
         numbers: NumberStyle | None = None,
         show: bool = False,
         **columns: str,
     ) -> "EditCsv":
-        """New column with the Gaussian error propagation of `formula`.
+        """New column with the Gaussian error propagation of `formula`::
 
-            add_uncertainty("sigma_P [W]", "U * I", {"U": 0.01, "I": "sigma_I [A]"})
+            add_uncertainty("sigma_P [W]", lambda U, I: U * I, {"U": 0.01, "I": "sigma_I [A]"})
+            add_uncertainty("sigma_H", lambda U_a, U_e: U_a / U_e,
+                            {"U_a": lambda U_a: 6e-4 * U_a + 6e-4, "U_e": 0.001})
 
         The derivatives are computed analytically. `sigmas` gives the uncertainty of every
-        variable: a number (e.g. the accuracy of a device, 0 for an exact quantity) or the name
-        of a column. `numbers`, `show` and `columns` as in add_column. A function must be a single
+        argument: a number (e.g. the accuracy of a device, 0 for an exact quantity), the name of
+        a column, or a function that computes it (its arguments are columns, found by name as in
+        add_column), e.g. the accuracy of a multimeter from the reading.
+        `numbers`, `show` and `columns` as in add_column. The function must be a single
         expression that pemlab can differentiate (a lambda with numpy is fine).
         """
         formula_ = make_formula(formula)
@@ -361,13 +365,14 @@ class EditCsv:
             )
         inputs = self._bind(formula_.variables, columns)
         sigma_sources = self._bind_sigmas(list(inputs), sigmas)
+        recorded, sigma_values = self._resolve_sigmas(sigma_sources)
         propagated = propagate_uncertainty(formula_.expression)
 
         values = self._input_values(inputs)
-        values.update(self._sigma_values(sigma_sources))
+        values.update(sigma_values)
         self.df[name] = evaluate(propagated, values)
         calculation = Calculation(
-            name, "uncertainty", formula_.text, inputs, sigma_sources, to_latex(propagated), show,
+            name, "uncertainty", formula_.text, inputs, recorded, to_latex(propagated), show,
             _numbers_dict(numbers),
         )
         self._record(calculation)
@@ -418,9 +423,9 @@ class EditCsv:
         return {variable: columns[variable] for variable in variables}
 
     def _bind_sigmas(
-        self, variables: list[str], sigmas: dict[str, str | float]
-    ) -> dict[str, str | float]:
-        """One uncertainty (number or column name) for every variable, nothing more."""
+        self, variables: list[str], sigmas: dict[str, str | float | Callable]
+    ) -> dict[str, str | float | Callable]:
+        """One uncertainty (number, column name or function) for every variable, nothing more."""
         missing = [v for v in variables if v not in sigmas]
         unused = [v for v in sigmas if v not in variables]
         unknown = [s for s in sigmas.values() if isinstance(s, str) and s not in self.df.columns]
@@ -435,11 +440,30 @@ class EditCsv:
     def _input_values(self, inputs: dict[str, str]) -> dict[str, np.ndarray]:
         return {symbol: self.column(column) for symbol, column in inputs.items()}
 
-    def _sigma_values(self, sources: dict[str, str | float]) -> dict[str, np.ndarray | float]:
-        return {
-            f"sigma_{symbol}": self.column(source) if isinstance(source, str) else source
-            for symbol, source in sources.items()
-        }
+    def _resolve_sigmas(
+        self, sources: dict[str, str | float | Callable]
+    ) -> tuple[dict[str, str | float | dict], dict[str, np.ndarray | float]]:
+        """The uncertainties as they are recorded, and their values for the propagation.
+
+        A function is computed from the columns that its arguments are named after.
+        """
+        recorded: dict[str, str | float | dict] = {}
+        values: dict[str, np.ndarray | float] = {}
+        for symbol, source in sources.items():
+            if callable(source):
+                formula = make_formula(source)
+                inputs = self._bind(formula.variables, {})
+                values[f"sigma_{symbol}"] = self._compute(formula, inputs)
+                recorded[symbol] = {
+                    "formula": formula.text,
+                    "inputs": inputs,
+                    "latex": formula.latex,
+                }
+            else:
+                is_column = isinstance(source, str)
+                values[f"sigma_{symbol}"] = self.column(source) if is_column else source
+                recorded[symbol] = source
+        return recorded, values
 
     def _record(self, calculation: Calculation) -> None:
         """Keep one calculation per column (recomputing a column replaces its calculation)."""

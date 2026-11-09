@@ -304,3 +304,52 @@ def test_the_report_says_that_x_errors_were_included(with_errors, tmp_path):
     lab.build()
     tex = (tmp_path / "build" / "plots" / "fit" / "fit.tex").read_text(encoding="utf-8")
     assert "effective variance" in tex
+
+
+# --- uncertainties given as functions ---
+
+
+@pytest.fixture
+def voltages(tmp_path):
+    path = tmp_path / "u.csv"
+    pd.DataFrame({"U_a [V]": [0.2, 0.4], "U_e [V]": [1.0, 1.0]}).to_csv(path, index=False)
+    return EditCsv(path)
+
+
+def test_a_function_as_uncertainty_equals_the_same_as_a_column(voltages):
+    voltages.add_column("err_a [V]", lambda U_a: 6e-4 * U_a + 6e-4)
+    voltages.add_column("err_e [V]", lambda U_e: 6e-4 * U_e + 6e-4)
+    voltages.add_uncertainty(
+        "s_col", lambda U_a, U_e: U_a / U_e, {"U_a": "err_a [V]", "U_e": "err_e [V]"}
+    )
+    voltages.add_uncertainty(
+        "s_fun",
+        lambda U_a, U_e: U_a / U_e,
+        {"U_a": lambda U_a: 6e-4 * U_a + 6e-4, "U_e": lambda U_e: 6e-4 * U_e + 6e-4},
+    )
+    assert voltages.column("s_fun") == pytest.approx(voltages.column("s_col"))
+
+
+def test_functions_numbers_and_columns_mix_and_are_recorded(voltages, tmp_path):
+    voltages.add_uncertainty(
+        "s",
+        lambda U_a, U_e: U_a / U_e,
+        {"U_a": lambda U_a: 0.01 * U_a, "U_e": 0.001},
+        show=True,
+    )
+    calculation = voltages.calculations[-1]
+    assert calculation.sigmas["U_e"] == 0.001
+    assert calculation.sigmas["U_a"]["inputs"] == {"U_a": "U_a [V]"}
+    assert "U_a [V]" in calculation.dependencies
+    tex = calculation_to_tex(calculation)
+    assert r"\sigma_{U_{a}}" in tex and r"\sigma_{U_{e}} = \SI{0.001}{V}" in tex
+    voltages.save(tmp_path / "out" / "u.csv")  # the record is written as json
+    stored = EditCsv(tmp_path / "out" / "u.csv").calculations[-1].sigmas["U_a"]
+    assert stored["formula"] == "0.01 * U_a"
+
+
+def test_a_sigma_function_with_an_unknown_argument_is_reported(voltages):
+    with pytest.raises(ValueError, match="keine Spalte"):
+        voltages.add_uncertainty(
+            "s", lambda U_a, U_e: U_a / U_e, {"U_a": lambda gibt_es_nicht: gibt_es_nicht, "U_e": 0}
+        )

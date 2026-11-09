@@ -138,13 +138,22 @@ $$\sigma_f = \sqrt{\sum_i \left(\frac{\partial f}{\partial x_i}\,\sigma_{x_i}\ri
 The derivatives are computed **analytically** (with sympy), and the resulting formula is part of
 the report.
 
-`sigmas` gives the uncertainty of **every** argument of the function. A number is a constant (for
-example the accuracy of a device), a string is the name of a column with the uncertainties. Use
-`0` for quantities that are exact:
+`sigmas` gives the uncertainty of **every** argument of the function. It is a number (a
+constant, for example the accuracy of a device), the name of a column with the uncertainties, or a
+**function** that computes it. Use `0` for quantities that are exact:
 
 ```python
 table.add_uncertainty(SIGMA_P, lambda U, I: U * I, {"U": 0.01, "I": SIGMA_I})
+
+# a multimeter: 0.06 % of the reading + 0.03 % of the 2 V range
+table.add_uncertainty(
+    SIGMA_H, lambda U_a, U_e: U_a / U_e,
+    {"U_a": lambda U_a: 6e-4 * U_a + 6e-4, "U_e": lambda U_e: 6e-4 * U_e + 6e-4},
+)
 ```
+
+The arguments of such a function are columns, found by name as in `add_column`. The report shows
+its expression next to the formula.
 
 A missing or superfluous entry raises an error, so a typo cannot silently make a value exact.
 

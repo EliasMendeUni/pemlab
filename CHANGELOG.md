@@ -16,6 +16,8 @@
 - Documentation in two parts, examples are workflow notebooks
 
 ### Added
+- `add_uncertainty`: an uncertainty in `sigmas` can be a function of the columns (e.g. the accuracy
+  of a multimeter from the reading)
 - Fits can include the uncertainty of x: `make_PlotData(x, y, y_sigma, x_sigma)`, effective variance method
   (optional, x error bars are drawn too)
 - `Analysis.make_PlotData(..., x_range=(low, high), y_range=(low, high))` selects the points of a plot or

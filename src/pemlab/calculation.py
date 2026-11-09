@@ -13,14 +13,20 @@ class Calculation:
     kind: str  # "column", "uncertainty", "values" (set_column) or "replacement" (unit change)
     formula: str  # formula as written by the user
     inputs: dict[str, str]  # symbol -> column used as input
-    sigmas: dict[str, str | float]  # uncertainty only: symbol -> sigma column or constant
+    # uncertainty only: symbol -> sigma column, constant or {formula, inputs, latex} of a function
+    sigmas: dict[str, str | float | dict]
     latex: str  # expression that computes the column, as LaTeX
     show: bool = False  # list it under "Calculations" in the report
     numbers: dict | None = None  # NumberStyle of this column in the table, as a dict
 
     @property
     def dependencies(self) -> list[str]:
-        sigma_columns = [s for s in self.sigmas.values() if isinstance(s, str)]
+        sigma_columns = []
+        for sigma in self.sigmas.values():
+            if isinstance(sigma, str):
+                sigma_columns.append(sigma)
+            elif isinstance(sigma, dict):
+                sigma_columns.extend(sigma["inputs"].values())
         return [*self.inputs.values(), *sigma_columns]
 
 
