@@ -18,8 +18,9 @@ from pemlab.visualize import Regression, Visualize
 
 def _used_columns(data: PlotData) -> list[str]:
     columns = [data.x[0], data.y[0]]
-    if data.y_sigma is not None:
-        columns.append(data.y_sigma[0])
+    for sigma in (data.y_sigma, data.x_sigma):
+        if sigma is not None:
+            columns.append(sigma[0])
     return columns
 
 
@@ -70,10 +71,16 @@ class Analysis:
         x: str,
         y: str,
         y_sigma: str | None = None,
+        x_sigma: str | None = None,
         x_range: tuple[float | None, float | None] | None = None,
         y_range: tuple[float | None, float | None] | None = None,
     ) -> PlotData:
         """Select columns by name, e.g. make_PlotData("I [A]", "U [V]", "sigma_U [V]").
+
+        `y_sigma` and `x_sigma` are columns with the uncertainties of y and x. They become error
+        bars, and a regression includes them: with `y_sigma` the points are weighted, with
+        `x_sigma` the uncertainty of x is included in the errors of the fit (see `make_regression`).
+        Both are optional.
 
         `x_range` and `y_range` keep only the points inside the interval `(low, high)`, ends
         included; `None` leaves that side open: `x_range=(None, 400)` is "x up to 400". Both
@@ -82,12 +89,16 @@ class Analysis:
         `make_PlotData("f [Hz]", "A [dB]", x_range=(100, 400))`.
         """
         x_values, y_values = self.table.column(x), self.table.column(y)
-        sigma_values = None if y_sigma is None else self.table.column(y_sigma)
         keep = _in_range(x_values, x_range, "x_range") & _in_range(y_values, y_range, "y_range")
         if not keep.any():
             raise ValueError(f"Keine Punkte in x_range={x_range}, y_range={y_range}.")
-        sigma = None if sigma_values is None else (y_sigma, sigma_values[keep])
-        data = PlotData((x, x_values[keep]), (y, y_values[keep]), sigma)
+
+        def uncertainty(column: str | None):
+            return None if column is None else (column, self.table.column(column)[keep])
+
+        data = PlotData(
+            (x, x_values[keep]), (y, y_values[keep]), uncertainty(y_sigma), uncertainty(x_sigma)
+        )
         data.calculations = collect_calculations(self.table.calculations, _used_columns(data))
         return data
 
@@ -97,10 +108,16 @@ class Analysis:
         """Fit `function(x, *parameters)` to the data; `plot.add(regression)` draws it.
 
         The result with the parameters and their uncertainties is `regression.result`.
+
+        Uncertainties of the data are used if it has them: `y_sigma` weights the points, and
+        `x_sigma` is included by the effective variance method (every point gets
+        sigma^2 = sigma_y^2 + (f'(x) sigma_x)^2, iterated), so the errors of the parameters
+        contain the uncertainty of x as well. Without any uncertainty the fit is unweighted.
         """
         numbers = numbers or self.numbers
-        sigma = None if data.y_sigma is None else data.y_sigma[1]
-        result = fit_function(function, data.x[1], data.y[1], sigma, p0)
+        y_sigma = None if data.y_sigma is None else data.y_sigma[1]
+        x_sigma = None if data.x_sigma is None else data.x_sigma[1]
+        result = fit_function(function, data.x[1], data.y[1], y_sigma, p0, x_sigma)
         print(result.summary(numbers))
         return Regression(function, data, result, numbers)
 

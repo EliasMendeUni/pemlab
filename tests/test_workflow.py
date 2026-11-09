@@ -264,3 +264,43 @@ def test_the_fit_uses_only_the_selected_range(ramp):
     regression = ramp.make_regression(straight, data)
     assert regression.result.values == pytest.approx([2.0, 0.0], abs=1e-9)
     assert len(regression.data.x[1]) == 5
+
+
+# --- x uncertainty in plots and regressions ---
+
+
+@pytest.fixture
+def with_errors(tmp_path):
+    x = np.linspace(1, 10, 10)
+    frame = pd.DataFrame({"x [m]": x, "y [m]": 2 * x + 1, "sx [m]": 0.2, "sy [m]": 0.1})
+    frame.to_csv(tmp_path / "e.csv", index=False)
+    lab = Project(tmp_path / "build")
+    return lab, lab.analysis(tmp_path / "e.csv")
+
+
+def test_x_sigma_is_drawn_and_included_in_the_fit(with_errors, tmp_path):
+    lab, analysis = with_errors
+    data = analysis.make_PlotData("x [m]", "y [m]", "sy [m]", "sx [m]")
+    plain = analysis.make_PlotData("x [m]", "y [m]", "sy [m]")
+    with_x = analysis.make_regression(straight, data).result
+    without_x = analysis.make_regression(straight, plain).result
+    assert with_x.x_errors_used and not without_x.x_errors_used
+    assert (with_x.errors > without_x.errors).all()
+    lab.Visualize("e").add(data)
+    ax = lab.Visualize("f").add(data).figure().axes[0]
+    assert len(ax.containers[0].lines[2]) == 2  # x and y error bars
+
+
+def test_the_range_cuts_the_x_uncertainty_too(with_errors):
+    _, analysis = with_errors
+    data = analysis.make_PlotData("x [m]", "y [m]", x_sigma="sx [m]", x_range=(3, 6))
+    assert len(data.x[1]) == len(data.x_sigma[1]) == 4
+
+
+def test_the_report_says_that_x_errors_were_included(with_errors, tmp_path):
+    lab, analysis = with_errors
+    data = analysis.make_PlotData("x [m]", "y [m]", "sy [m]", "sx [m]")
+    analysis.regression("fit", straight, data)
+    lab.build()
+    tex = (tmp_path / "build" / "plots" / "fit" / "fit.tex").read_text(encoding="utf-8")
+    assert "effective variance" in tex

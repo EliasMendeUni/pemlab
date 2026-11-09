@@ -131,6 +131,11 @@ def fit_result_to_tex(
             rf"$\chi^2/\mathrm{{ndf}} = {result.chi2:.3g}/{result.dof}"
             rf" = {result.chi2 / result.dof:.3g}$"
         )
+    if result.x_errors_used:
+        parts.append(
+            r"Uncertainties of $x$ included (effective variance: "
+            r"$\sigma^2 = \sigma_y^2 + (f'(x)\,\sigma_x)^2$)."
+        )
     return "\n\\par\\smallskip\n".join(parts)
 
 

@@ -100,6 +100,7 @@ class PlotData:
     x: tuple[str, np.ndarray]
     y: tuple[str, np.ndarray]
     y_sigma: tuple[str, np.ndarray] | None = None
+    x_sigma: tuple[str, np.ndarray] | None = None
     calculations: list[Calculation] = field(default_factory=list)  # for the report
 
 

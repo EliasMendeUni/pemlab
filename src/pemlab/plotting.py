@@ -43,13 +43,14 @@ def _draw_measurements(ax: Axes, data: PlotData, points: PointStyle) -> None:
         "linestyle": "-" if points.connect_points else "none",
         "label": points.label,
     }
-    if data.y_sigma is None:
+    if data.y_sigma is None and data.x_sigma is None:
         ax.plot(x, y, **options)
     else:
         ax.errorbar(
             x,
             y,
-            yerr=data.y_sigma[1],
+            yerr=None if data.y_sigma is None else data.y_sigma[1],
+            xerr=None if data.x_sigma is None else data.x_sigma[1],
             capsize=points.capsize,
             elinewidth=points.errorbar_linewidth,
             **options,

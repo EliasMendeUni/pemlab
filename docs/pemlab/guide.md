@@ -161,7 +161,18 @@ a formula is treated as one quantity.
 data = analysis.make_PlotData(I, U, SIGMA_U)  # x, y, y-uncertainty
 ```
 
-The uncertainty is optional. Without it the fit is unweighted and there is no chi-squared.
+The uncertainties are optional. Without any the fit is unweighted and there is no chi-squared.
+
+`x_sigma` is the same for the uncertainty of x (`make_PlotData(f, U, "sigma_U [V]", "sigma_f [Hz]")`).
+Both become error bars, and a regression uses them:
+
+- with `y_sigma` the points are weighted, and the errors and chi-squared are absolute;
+- with `x_sigma` the uncertainty of x is **included in the errors of the fit** by the *effective
+  variance* method: every point gets $\sigma^2 = \sigma_y^2 + \bigl(f'(x)\,\sigma_x\bigr)^2$,
+  with the slope $f'$ of the fitted curve. The weights depend on the parameters, so the fit is
+  repeated until they no longer change. The report says that the x uncertainties were included.
+
+Either one is optional. Leave `x_sigma` out and the x values count as exact.
 
 `x_range` and `y_range` keep only the points inside an interval `(low, high)` (both ends
 included, `None` leaves a side open). Use them to fit a part of the measurement, for example the

@@ -16,6 +16,8 @@
 - Documentation in two parts, examples are workflow notebooks
 
 ### Added
+- Fits can include the uncertainty of x: `make_PlotData(x, y, y_sigma, x_sigma)`, effective variance method
+  (optional, x error bars are drawn too)
 - `Analysis.make_PlotData(..., x_range=(low, high), y_range=(low, high))` selects the points of a plot or
   fit by intervals (`None` = open side)
 - `Project.Visualize(name)`: any number of data sets, fits (`Analysis.make_regression`) and functions
