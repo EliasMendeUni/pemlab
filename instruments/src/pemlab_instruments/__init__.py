@@ -5,6 +5,7 @@ from __future__ import annotations
 __version__ = "0.1.0"
 
 from .discovery import find_instruments
+from .files import timestamped_path
 from .dmm import (
     measure_current,
     measure_resistance,
@@ -46,4 +47,5 @@ __all__ = [
     "measure_temperature_pt100",
     "measure_voltage",
     "pt100_temperature",
+    "timestamped_path",
 ]

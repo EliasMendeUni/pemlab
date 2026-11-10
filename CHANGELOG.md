@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Changed
+- `pemlab_instruments`: saved files get date and time in the name (`hp.csv` becomes
+  `hp_2026-11-10_14-30-05.csv`), so a repeated measurement never overwrites an earlier file
+  (`MeasurementLog.save`, `save=` of the sweeps, `Oscilloscope.screenshot`, `LivePlot.save`; a counter is added if the
+  name exists). `timestamp=False` keeps the name as given; the real path is the return value of
+  `save` / `screenshot` and `sweep.save_path`. New: `timestamped_path`
 - The measurement code is its own package, `pemlab-instruments` (folder `instruments/`, import
   `pemlab_instruments`, Python 3.8 or newer, no dependency on pemlab). `pemlab.instruments` and the
   `instruments` extra are gone; `LivePlot` takes a `LiveStyle` instead of `PointStyle`/`LayoutStyle`;

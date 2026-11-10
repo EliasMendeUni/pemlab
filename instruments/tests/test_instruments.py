@@ -175,6 +175,7 @@ def test_oscilloscope_measure_waveform_and_screenshot(tmp_path):
     assert voltage.tolist() == pytest.approx(expected_voltage)
     assert time.tolist() == pytest.approx(expected_time)
     path = scope.screenshot(tmp_path / "shots" / "scope.png")
+    assert path.name.startswith("scope_") and path.suffix == ".png"
     assert path.read_bytes() == bytes([137, 80, 78, 71])
     with pytest.raises(ValueError):
         scope.measure("nonsense")
@@ -187,6 +188,7 @@ def test_measurement_log_saves_csv_in_pemlab_columns(tmp_path):
     with pytest.raises(ValueError):
         log.add(3)
     path = log.save(tmp_path / "data" / "r.csv")
+    assert path.name.startswith("r_") and path.suffix == ".csv"
     lines = path.read_text(encoding="utf-8").splitlines()
     assert lines == ["U [V],I [A]", "1,0.001", "2,0.002"]
     assert len(log) == 2
@@ -301,7 +303,46 @@ def test_sweep_saves_row_by_row_and_survives_ctrl_c(tmp_path):
                 raise KeyboardInterrupt
     assert sweep.interrupted
     assert len(sweep.log) == 2
-    assert path.read_text(encoding="utf-8").splitlines() == ["f [Hz],U [V]", "1,2", "10,20"]
+    assert sweep.save_path.name.startswith("h_")  # date and time are part of the file name
+    assert not path.exists()
+    lines = sweep.save_path.read_text(encoding="utf-8").splitlines()
+    assert lines == ["f [Hz],U [V]", "1,2", "10,20"]
+
+
+def test_timestamped_path_has_date_and_time_and_never_reuses_a_file(tmp_path):
+    from datetime import datetime
+
+    from pemlab_instruments import timestamped_path
+
+    when = datetime(2026, 11, 10, 14, 30, 5)
+    first = timestamped_path(tmp_path / "hp.csv", when)
+    assert first == tmp_path / "hp_2026-11-10_14-30-05.csv"
+    first.write_text("x", encoding="utf-8")
+    second = timestamped_path(tmp_path / "hp.csv", when)  # same second: a counter, no overwrite
+    assert second == tmp_path / "hp_2026-11-10_14-30-05_2.csv"
+    second.write_text("x", encoding="utf-8")
+    assert timestamped_path(tmp_path / "hp.csv", when).name == "hp_2026-11-10_14-30-05_3.csv"
+
+
+def test_repeated_measurements_do_not_overwrite_each_other(tmp_path):
+    from pemlab_instruments import LinSweep
+
+    log = MeasurementLog("U [V]")
+    log.add(1)
+    paths = {log.save(tmp_path / "m.csv"), log.save(tmp_path / "m.csv")}
+    assert len(paths) == 2 and all(p.exists() for p in paths)
+    assert log.save(tmp_path / "plain.csv", timestamp=False) == tmp_path / "plain.csv"
+
+    saved = []
+    for _ in range(2):
+        with LinSweep(1, 2, 2, columns=["x", "y"], save=tmp_path / "s.csv") as sweep:
+            for x in sweep:
+                sweep.add(x)
+        saved.append(sweep.save_path)
+    assert saved[0] != saved[1] and all(p.exists() for p in saved)
+    with LinSweep(1, 2, 2, columns=["x", "y"], save=tmp_path / "t.csv", timestamp=False) as fixed:
+        pass
+    assert fixed.save_path == tmp_path / "t.csv"
 
 
 def test_timed_uses_real_time_and_stops_after_duration():
@@ -326,3 +367,16 @@ def test_live_plot_follows_the_rows():
             sweep.add(2.0, f)
     assert list(plot.line.get_xdata()) == [1, 2, 3]
     assert list(plot.line.get_ydata()) == [0.5, 1.0, 1.5]
+
+
+def test_live_plot_save_has_date_and_time(tmp_path):
+    from pemlab_instruments import LinSweep, LivePlot
+
+    with LinSweep(1, 2, 2, columns=["x", "y"]) as sweep:
+        plot = LivePlot(sweep, x="x", y="y")
+        for x in sweep:
+            sweep.add(x)
+    first = plot.save(tmp_path / "plots" / "p.png")
+    second = plot.save(tmp_path / "plots" / "p.png")
+    assert first != second and first.name.startswith("p_") and first.exists() and second.exists()
+    assert plot.save(tmp_path / "plain.png", timestamp=False) == tmp_path / "plain.png"
