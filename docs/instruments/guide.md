@@ -170,7 +170,13 @@ arrays = log.to_arrays()                                   # {"t [s]": array, ..
 values = measure_repeated(lambda: measure_voltage(dmm_1), n=10, wait=0.2)  # for a mean
 ```
 
-The saved CSV is the starting point of the analysis: `lab.edit_csv("data/measurements/resistor.csv")`.
+The saved CSV is the starting point of the analysis: `lab.edit_csv(...)` with the real file name.
+
+**Date and time are part of every saved file name** (`log.save`, `save=` of a sweep,
+`scope.screenshot`, `plot.save`): `data/measurements/resistor.csv` becomes
+`data/measurements/resistor_2026-11-10_14-30-05.csv`. A repeated measurement never overwrites an
+earlier file; if the name exists already (same second) a counter is added. `save` and `screenshot`
+return the real path, a sweep has it as `sweep.save_path`. `timestamp=False` keeps the name as given.
 
 ## Evaluate a recorded signal
 

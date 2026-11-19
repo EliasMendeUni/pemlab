@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from pemlab_instruments.files import timestamped_path
 from pemlab_instruments.log import MeasurementLog
 
 
@@ -26,6 +27,10 @@ class Sweep:
                 sweep.wait(0.3)
                 sweep.add(measure_voltage(dmm_1, ac=True), measure_voltage(dmm_2, ac=True))
 
+    The csv file name gets date and time (`hp.csv` -> `hp_2026-11-10_14-30-05.csv`), so a repeated
+    measurement never overwrites an earlier one; the real name is `sweep.save_path`.
+    `timestamp=False` keeps the name as given.
+
     Ctrl+C anywhere in the block ends the measurement cleanly: the rows so far stay in `sweep.log`
     (and in the csv file, which is written row by row), the code after the block runs on. An
     endless measurement is `Sweep(itertools.count(), ...)`.
@@ -37,10 +42,13 @@ class Sweep:
         columns: list[str],
         save: str | Path | None = None,
         verbose: bool = False,
+        timestamp: bool = True,
     ):
         self.values = values
         self.log = MeasurementLog(*columns)
-        self.save_path = None if save is None else Path(save)
+        self.timestamp = timestamp
+        self._save_base = None if save is None else Path(save)
+        self.save_path = self._save_base  # the real file, with date and time, once the block starts
         self.verbose = verbose
         self.value: float | None = None  # the current value of the loop
         self.interrupted = False
@@ -49,7 +57,9 @@ class Sweep:
 
     def __enter__(self) -> Sweep:
         self.interrupted = False
-        if self.save_path is not None:
+        if self._save_base is not None:
+            # with date and time in the name: a repeated measurement never overwrites the last
+            self.save_path = timestamped_path(self._save_base) if self.timestamp else self._save_base
             self.save_path.parent.mkdir(parents=True, exist_ok=True)
             self.save_path.write_text(",".join(self.log.columns) + "\n", encoding="utf-8")
         return self

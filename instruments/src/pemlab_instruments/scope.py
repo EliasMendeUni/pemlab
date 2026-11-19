@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
+from pemlab_instruments.files import timestamped_path
+
 _ITEMS = {
     "vpp": "VPP",
     "vrms": "VRMS",
@@ -73,9 +75,10 @@ class Oscilloscope:
         time = (np.arange(len(raw)) - x_reference) * x_increment + x_origin
         return time, voltage
 
-    def screenshot(self, path: str | Path) -> Path:
-        """Save the screen as PNG."""
-        path = Path(path)
+    def screenshot(self, path: str | Path, timestamp: bool = True) -> Path:
+        """Save the screen as PNG and return the real path. With `timestamp=True` (default)
+        date and time are part of the file name, so no earlier screenshot is overwritten."""
+        path = timestamped_path(path) if timestamp else Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = self.resource.query_binary_values(
             ":DISPlay:DATA? ON,OFF,PNG", datatype="B", container=bytes

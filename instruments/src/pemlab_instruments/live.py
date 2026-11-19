@@ -9,6 +9,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 
+from pemlab_instruments.files import timestamped_path
 from pemlab_instruments.sweep import Sweep
 
 Quantity = Union[str, Callable[[dict], float]]
@@ -106,9 +107,12 @@ class LivePlot:
         self.ax.autoscale_view()
         plt.pause(0.001)  # draws and lets the window handle its events
 
-    def save(self, path: Union[str, Path]) -> Path:
-        """Save the current state of the plot (pdf, png, ...)."""
-        path = Path(path)
+    def save(self, path: Union[str, Path], timestamp: bool = True) -> Path:
+        """Save the current state of the plot (pdf, png, ...) and return the real path.
+
+        With `timestamp=True` (default) date and time are part of the file name, so an earlier
+        plot is not overwritten."""
+        path = timestamped_path(path) if timestamp else Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.fig.savefig(path, dpi=self.style.dpi)
         return path

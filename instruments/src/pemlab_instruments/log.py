@@ -6,6 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
+from pemlab_instruments.files import timestamped_path
+
 
 class MeasurementLog:
     """Rows of measured values. Column names as everywhere in pemlab: "U [V]", "I [mA]"."""
@@ -35,9 +37,14 @@ class MeasurementLog:
         data = np.array(self.rows, dtype=float).reshape(len(self.rows), len(self.columns))
         return {column: data[:, i] for i, column in enumerate(self.columns)}
 
-    def save(self, path: str | Path) -> Path:
-        """Write the csv file (the folder is created if needed) and return its path."""
-        path = Path(path)
+    def save(self, path: str | Path, timestamp: bool = True) -> Path:
+        """Write the csv file (the folder is created if needed) and return its real path.
+
+        With `timestamp=True` (default) date and time are part of the file name,
+        `data/hp.csv` is saved as `data/hp_2026-11-10_14-30-05.csv`, so repeating a measurement
+        never overwrites the earlier file. `timestamp=False` uses the name as it is.
+        """
+        path = timestamped_path(path) if timestamp else Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = [",".join(self.columns)]
         lines += [",".join(format(value, ".12g") for value in row) for row in self.rows]
