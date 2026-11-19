@@ -16,6 +16,11 @@
 - Documentation in two parts, examples are workflow notebooks
 
 ### Added
+- `Project.propagate(name, formula, values, sigmas, result, show)` and `pemlab.propagate`: Gaussian
+  error propagation of a single value. Only parameters with an uncertainty are propagated, the
+  result is printed (with the share of every parameter), returned as `PropagationResult` and written
+  to `build/propagations/<name>/<name>.tex` (parameters, result as `\SI{... +- ...}{unit}`, with
+  `show=True` also formula, partial derivatives and contributions)
 - `add_uncertainty`: an uncertainty in `sigmas` can be a function of the columns (e.g. the accuracy
   of a multimeter from the reading)
 - Fits can include the uncertainty of x: `make_PlotData(x, y, y_sigma, x_sigma)`, effective variance method

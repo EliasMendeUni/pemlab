@@ -7,10 +7,12 @@ import sys
 from pathlib import Path
 
 from pemlab.analysis import Analysis
-from pemlab.artifacts import Artifact, TableArtifact
+from pemlab.artifacts import Artifact, PropagationArtifact, TableArtifact
 from pemlab.data import EditCsv, column_variables_to_text
+from pemlab.latex import propagation_to_tex
 from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
+from pemlab.propagation import PropagationResult, propagate
 from pemlab.visualize import Visualize as VisualizePlot
 
 _BUILD_MARKER = ".pemlab-build"
@@ -105,6 +107,40 @@ class Project:
             self.numbers,
             register=self.add,
         )
+
+    def propagate(
+        self,
+        name: str,
+        formula,
+        values: dict[str, float],
+        sigmas: dict[str, float] | None = None,
+        result: str | None = None,
+        show: bool = False,
+        numbers: NumberStyle | None = None,
+    ) -> PropagationResult:
+        """Gaussian error propagation of one value, like `add_uncertainty` for a single result::
+
+            lab.propagate(
+                "Ua_addierer",
+                lambda R_2, R_11, U_e1: -R_2 / R_11 * U_e1,
+                values={"R_2 [Ohm]": 1e5, "R_11 [Ohm]": 1e4, "U_e1 [V]": 0.5},
+                sigmas={"R_2": 1e3, "R_11": 100},      # U_e1 without an uncertainty: exact
+                result="U_a [V]",
+            )
+
+        `formula` is a function (single expression, arguments are the parameters) or a text.
+        The keys of `values` may carry the unit; `sigmas` only needs the parameters that have an
+        uncertainty, the others count as exact. The result (value, uncertainty, share of every
+        parameter) is printed, returned and written to `build/propagations/<name>/<name>.tex`:
+        the parameters with their uncertainties and the result as value ± uncertainty. With
+        `show=True` the file also contains the formula, the partial derivatives and the sum of
+        the contributions. `result` is the name and unit of the result (default `name`).
+        """
+        numbers = numbers or self.numbers
+        outcome = propagate(formula, values, sigmas, result or name)
+        print(outcome.summary(numbers))
+        self.add(PropagationArtifact(name, propagation_to_tex(outcome, show, numbers)))
+        return outcome
 
     def table(
         self, csv_file: str | Path, name: str | None = None, numbers: NumberStyle | None = None

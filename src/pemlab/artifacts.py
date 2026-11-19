@@ -54,6 +54,18 @@ class MeanArtifact:
         (folder / f"{self.name}.tex").write_text(self.tex, encoding="utf-8")
 
 
+class PropagationArtifact:
+    kind = "propagations"
+    folder = None
+
+    def __init__(self, name: str, tex: str):
+        self.name = name
+        self.tex = tex
+
+    def write(self, folder: Path, tex_folder: str) -> None:
+        (folder / f"{self.name}.tex").write_text(self.tex, encoding="utf-8")
+
+
 class TableArtifact:
     kind = "tables"
 
