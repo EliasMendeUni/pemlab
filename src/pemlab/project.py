@@ -112,32 +112,35 @@ class Project:
         self,
         name: str,
         formula,
-        values: dict[str, float],
-        sigmas: dict[str, float] | None = None,
         result: str | None = None,
         show: bool = False,
         numbers: NumberStyle | None = None,
+        **parameters,
     ) -> PropagationResult:
         """Gaussian error propagation of one value, like `add_uncertainty` for a single result::
 
             lab.propagate(
                 "Ua_addierer",
                 lambda R_2, R_11, U_e1: -R_2 / R_11 * U_e1,
-                values={"R_2 [Ohm]": 1e5, "R_11 [Ohm]": 1e4, "U_e1 [V]": 0.5},
-                sigmas={"R_2": 1e3, "R_11": 100},      # U_e1 without an uncertainty: exact
+                R_2=(1e5, 1e3, "R_2 [Ohm]"),     # (value, uncertainty, name with unit)
+                R_11=(1e4, 100, "R_11 [Ohm]"),
+                U_e1=0.5,                         # a number alone is exact
                 result="U_a [V]",
             )
 
-        `formula` is a function (single expression, arguments are the parameters) or a text.
-        The keys of `values` may carry the unit; `sigmas` only needs the parameters that have an
-        uncertainty, the others count as exact. The result (value, uncertainty, share of every
-        parameter) is printed, returned and written to `build/propagations/<name>/<name>.tex`:
-        the parameters with their uncertainties and the result as value ± uncertainty. With
-        `show=True` the file also contains the formula, the partial derivatives and the sum of
-        the contributions. `result` is the name and unit of the result (default `name`).
+        `formula` is a function (single expression) or a text. Every parameter is a keyword
+        argument named like the function argument: a tuple `(value, uncertainty)` or
+        `(value, uncertainty, name)` (the name may carry the unit, default is the argument name),
+        or a number for an exact value; an uncertainty of None or 0 is exact too and is left out
+        of the propagation. The result (value, uncertainty, share of every parameter) is printed,
+        returned and written to `build/propagations/<name>/<name>.tex`: the parameters with
+        their uncertainties and the result as value ± uncertainty. With `show=True` the file
+        also contains the formula, the partial derivatives and the sum of the contributions.
+        `result` is the name and unit of the result (default `name`). The names `name`,
+        `formula`, `result`, `show` and `numbers` cannot be parameter names.
         """
         numbers = numbers or self.numbers
-        outcome = propagate(formula, values, sigmas, result or name)
+        outcome = propagate(formula, result or name, **parameters)
         print(outcome.summary(numbers))
         self.add(PropagationArtifact(name, propagation_to_tex(outcome, show, numbers)))
         return outcome

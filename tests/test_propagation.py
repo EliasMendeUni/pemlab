@@ -6,7 +6,9 @@ import pytest
 from pemlab import NumberStyle, Project, propagate
 from pemlab.latex import propagation_to_tex
 
-VALUES = {"R_2 [Ohm]": 1e5, "R_11 [Ohm]": 1e4, "U_e1 [V]": 0.5}
+R_2 = (1e5, 1e3, "R_2 [Ohm]")
+R_11 = (1e4, 100, "R_11 [Ohm]")
+U_e1 = (0.5, 1e-3, "U_e1 [V]")
 
 
 def amplifier(R_2, R_11, U_e1):
@@ -14,61 +16,74 @@ def amplifier(R_2, R_11, U_e1):
 
 
 def test_value_and_uncertainty_follow_gauss():
-    result = propagate(amplifier, VALUES, {"R_2": 1e3, "R_11": 100, "U_e1 [V]": 1e-3}, "U_a [V]")
+    result = propagate(amplifier, "U_a [V]", R_2=R_2, R_11=R_11, U_e1=U_e1)
     # relative errors 1 %, 1 % and 0.2 % of -5 V
     assert result.value == pytest.approx(-5.0)
     assert result.error == pytest.approx(5.0 * np.sqrt(0.01**2 + 0.01**2 + 0.002**2))
 
 
-def test_a_parameter_without_uncertainty_counts_as_exact():
-    result = propagate(amplifier, VALUES, {"R_2": 1e3})
+def test_a_number_alone_is_exact():
+    result = propagate(amplifier, R_2=R_2, R_11=1e4, U_e1=0.5)
     assert result.error == pytest.approx(5.0 * 0.01)
-    exact = [p.symbol for p in result.parameters if p.sigma is None]
-    assert exact == ["R_11", "U_e1"]
+    assert [p.symbol for p in result.parameters if p.sigma is None] == ["R_11", "U_e1"]
     assert result.derivatives.keys() == {"R_2"}
 
 
-def test_a_zero_uncertainty_is_exact_too():
-    assert propagate(amplifier, VALUES, {"R_2": 1e3, "R_11": 0}).error == pytest.approx(0.05)
+@pytest.mark.parametrize("sigma", [None, 0])
+def test_an_uncertainty_of_none_or_zero_is_exact_too(sigma):
+    result = propagate(amplifier, R_2=R_2, R_11=(1e4, sigma), U_e1=0.5)
+    assert result.error == pytest.approx(0.05)
+
+
+def test_the_name_defaults_to_the_argument_name_and_may_carry_the_unit():
+    result = propagate(amplifier, R_2=R_2, R_11=(1e4, 100), U_e1=(0.5, None, "U_e1 [V]"))
+    assert [p.name for p in result.parameters] == ["R_2 [Ohm]", "R_11", "U_e1 [V]"]
+    assert [p.unit for p in result.parameters] == ["Ohm", None, "V"]
+    assert result.unit is None
+
+
+def test_parameters_are_in_the_order_of_the_call():
+    result = propagate(amplifier, U_e1=U_e1, R_11=R_11, R_2=R_2)
+    assert [p.symbol for p in result.parameters] == ["U_e1", "R_11", "R_2"]
 
 
 def test_formula_as_text_gives_the_same_as_a_function():
-    text = propagate("-R_2 / R_11 * U_e1", VALUES, {"R_2": 1e3, "R_11": 100})
-    function = propagate(amplifier, VALUES, {"R_2": 1e3, "R_11": 100})
+    text = propagate("-R_2 / R_11 * U_e1", R_2=R_2, R_11=R_11, U_e1=0.5)
+    function = propagate(amplifier, R_2=R_2, R_11=R_11, U_e1=0.5)
     assert (text.value, text.error) == pytest.approx((function.value, function.error))
 
 
 def test_the_shares_of_the_variance_add_up_to_one():
-    result = propagate(amplifier, VALUES, {"R_2": 1e3, "R_11": 100, "U_e1": 1e-3})
+    result = propagate(amplifier, R_2=R_2, R_11=R_11, U_e1=U_e1)
     assert sum(result.share(p) for p in result.parameters) == pytest.approx(1.0)
 
 
-def test_unit_and_symbol_come_from_the_names():
-    result = propagate(amplifier, VALUES, {"R_2": 1e3}, "U_a [V]")
-    assert result.unit == "V"
-    assert [p.unit for p in result.parameters] == ["Ohm", "Ohm", "V"]  # order of `values`
+def test_the_unit_of_the_result_comes_from_its_name():
+    assert propagate(amplifier, "U_a [V]", R_2=R_2, R_11=1e4, U_e1=0.5).unit == "V"
 
 
 def test_summary_shows_value_error_and_contributions():
-    text = propagate(amplifier, VALUES, {"R_2": 1e3}, "U_a [V]").summary()
+    text = propagate(amplifier, "U_a [V]", R_2=R_2, R_11=1e4, U_e1=0.5).summary()
     assert "U_a = -5.000 ± 0.050 V" in text
     assert "R_2" in text and "100 % of the variance" in text
     assert "without uncertainty: R_11, U_e1" in text
 
 
 @pytest.mark.parametrize(
-    ("values", "sigmas", "message"),
+    ("parameters", "message"),
     [
-        ({"R_2": 1.0, "R_11": 1.0}, {"R_2": 0.1}, "U_e1"),  # a value is missing
-        ({**VALUES, "x": 1.0}, {"R_2": 0.1}, "kommt in der Formel nicht vor"),
-        (VALUES, {"R_3": 0.1}, "nicht als Parameter"),
-        (VALUES, {"R_2": -1.0}, ">= 0"),
-        (VALUES, {}, "Mindestens ein Parameter"),
+        ({"R_2": R_2, "R_11": R_11}, "U_e1=\\(Wert, Fehler\\)"),  # a parameter is missing
+        ({"R_2": R_2, "R_11": R_11, "U_e1": U_e1, "x": 1.0}, "kommt in der Formel nicht vor"),
+        ({"R_2": R_2, "R_11": 1e4, "U_e1": 0.5, "R_3": (1.0, 0.1)}, "R_3"),  # not in formula
+        ({"R_2": (1e5, -1.0), "R_11": R_11, "U_e1": U_e1}, ">= 0"),
+        ({"R_2": 1e5, "R_11": 1e4, "U_e1": 0.5}, "braucht einen Fehler"),  # no uncertainty at all
+        ({"R_2": (1e5,), "R_11": R_11, "U_e1": U_e1}, "Wert, Fehler"),
+        ({"R_2": (1e5, 1e3, 7), "R_11": R_11, "U_e1": U_e1}, "Text"),
     ],
 )
-def test_wrong_input_gets_a_helpful_error(values, sigmas, message):
+def test_wrong_input_gets_a_helpful_error(parameters, message):
     with pytest.raises(ValueError, match=message):
-        propagate(amplifier, values, sigmas)
+        propagate(amplifier, **parameters)
 
 
 def test_a_function_that_cannot_be_differentiated_is_refused():
@@ -78,11 +93,11 @@ def test_a_function_that_cannot_be_differentiated_is_refused():
         return -gain * U_e1
 
     with pytest.raises(ValueError, match="lässt sich nicht ableiten"):
-        propagate(not_one_expression, VALUES, {"R_2": 1.0})
+        propagate(not_one_expression, R_2=R_2, R_11=1e4, U_e1=0.5)
 
 
 def test_tex_with_the_calculation_has_formula_derivatives_and_result():
-    result = propagate(amplifier, VALUES, {"R_2": 1e3, "R_11": 100}, "U_a [V]")
+    result = propagate(amplifier, "U_a [V]", R_2=R_2, R_11=R_11, U_e1=(0.5, None, "U_e1 [V]"))
     short = propagation_to_tex(result, show=False)
     long = propagation_to_tex(result, show=True)
 
@@ -97,14 +112,15 @@ def test_tex_with_the_calculation_has_formula_derivatives_and_result():
 
 
 def test_tex_writes_the_exponent_once_behind_the_uncertainty():
-    result = propagate("a * 1e-9", {"a": 2.848}, {"a": 0.0037}, "U [V]")
-    tex = propagation_to_tex(result)
-    assert r"{2.8480 +- 0.0037 e-9}{V}" in tex
+    result = propagate("a * 1e-9", "U [V]", a=(2.848, 0.0037))
+    assert r"{2.8480 +- 0.0037 e-9}{V}" in propagation_to_tex(result)
 
 
 def test_project_writes_the_artifact_and_returns_the_result(tmp_path, capsys):
     lab = Project(tmp_path / "build", numbers=NumberStyle())
-    result = lab.propagate("gain", amplifier, VALUES, {"R_2": 1e3}, result="U_a [V]", show=True)
+    result = lab.propagate(
+        "gain", amplifier, result="U_a [V]", show=True, R_2=R_2, R_11=1e4, U_e1=0.5
+    )
     lab.build()
 
     assert result.value == pytest.approx(-5.0)

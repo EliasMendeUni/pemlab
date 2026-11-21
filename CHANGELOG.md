@@ -21,9 +21,10 @@
 - Documentation in two parts, examples are workflow notebooks
 
 ### Added
-- `Project.propagate(name, formula, values, sigmas, result, show)` and `pemlab.propagate`: Gaussian
-  error propagation of a single value. Only parameters with an uncertainty are propagated, the
-  result is printed (with the share of every parameter), returned as `PropagationResult` and written
+- `Project.propagate(name, formula, result, show, **parameters)` and `pemlab.propagate`: Gaussian
+  error propagation of a single value. Every parameter is a keyword argument named like the
+  function argument, `R=(value, uncertainty, name)` (a number alone is exact). Only parameters
+  with an uncertainty are propagated, the result is printed (with the share of every parameter), returned as `PropagationResult` and written
   to `build/propagations/<name>/<name>.tex` (parameters, result as `\SI{... +- ...}{unit}`, with
   `show=True` also formula, partial derivatives and contributions)
 - `add_uncertainty`: an uncertainty in `sigmas` can be a function of the columns (e.g. the accuracy

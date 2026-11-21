@@ -164,29 +164,33 @@ a formula is treated as one quantity.
 
 ### Uncertainty of a single value
 
-`lab.propagate` is `add_uncertainty` for **one** result, e.g. a gain computed from resistors. The
-parameters are numbers, and only those with an uncertainty are propagated; the others count as
-exact:
+`lab.propagate` is `add_uncertainty` for **one** result, e.g. a gain computed from resistors. Every
+parameter is a keyword argument named like the argument of the function, with its value,
+uncertainty and name:
 
 ```python
 lab.propagate(
     "adder",
     lambda R_2, R_11, R_12, U_e1, U_e2: -R_2 * (U_e1 / R_11 + U_e2 / R_12),
-    values={"R_2 [Ohm]": 1e5, "R_11 [Ohm]": 1e4, "R_12 [Ohm]": 1e4, "U_e1 [V]": 1.234, "U_e2 [V]": 0.5},
-    sigmas={"R_2": 1e3, "R_11": 100, "R_12": 100, "U_e1": 4e-4},   # U_e2: no uncertainty, exact
+    R_2=(1e5, 1e3, "R_2 [Ohm]"),      # (value, uncertainty, name with unit)
+    R_11=(1e4, 100, "R_11 [Ohm]"),
+    R_12=(1e4, 100, "R_12 [Ohm]"),
+    U_e1=(1.234, 4e-4, "U_e1 [V]"),
+    U_e2=(0.5, None, "U_e2 [V]"),     # no uncertainty: exact, left out of the propagation
     result="U_a [V]",
     show=True,
 )
 ```
 
-The keys of `values` may carry the unit; `sigmas` uses the same names with or without the unit.
-The call prints the result and the share every parameter has in the uncertainty, returns it as a
+The name is optional (default: the argument name, without unit), and a plain number (`U_e2=0.5`)
+is an exact value as well. Only parameters with an uncertainty are propagated. The names `name`,
+`formula`, `result`, `show` and `numbers` cannot be parameter names. The call prints the result and the share every parameter has in the uncertainty, returns it as a
 `PropagationResult` (`.value`, `.error`, `.parameters`), and `build()` writes
 `propagations/adder/adder.tex`: the parameters with their uncertainties and the result as
 $U_a = (-17.34 \pm 0.22)\,\mathrm{V}$. `show=True` adds the formula, the partial derivatives and
 the sum of the contributions. Put it into the report with
 `\input{<build folder>/propagations/adder/adder.tex}`; it is display math and a table, not a
-float. Without a project, `pemlab.propagate(formula, values, sigmas, result)` gives the same
+float. Without a project, `pemlab.propagate(formula, result, **parameters)` gives the same
 `PropagationResult`.
 
 ## Plots and regression

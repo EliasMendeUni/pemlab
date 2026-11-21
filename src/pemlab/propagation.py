@@ -1,6 +1,5 @@
 """Gaussian error propagation for a single value: the result and what contributes to it."""
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -15,11 +14,6 @@ from pemlab.formulas import (
     split_unit,
 )
 from pemlab.numberstyle import NumberStyle
-
-
-def _symbol(name: str) -> str:
-    """Name of a parameter in the formula: 'R_2 [Ohm]' -> 'R_2'."""
-    return re.sub(r"\W+", "_", column_symbol(name)).strip("_")
 
 
 @dataclass
@@ -112,59 +106,71 @@ def _expression(formula: str | Callable) -> sympy.Expr:
     return expression
 
 
-def propagate(
-    formula: str | Callable,
-    values: dict[str, float],
-    sigmas: dict[str, float] | None = None,
-    result: str = "f",
-) -> PropagationResult:
+def _parameter(symbol: str, spec) -> tuple[float, float | None, str]:
+    """(value, uncertainty, display name) of one parameter.
+
+    A number is an exact value, a tuple is (value, uncertainty) or (value, uncertainty, name).
+    No name means the argument name; an uncertainty None or 0 means exact.
+    """
+    if not isinstance(spec, tuple):
+        spec = (spec, None)
+    if len(spec) not in (2, 3):
+        raise ValueError(
+            f"{symbol}: eine Zahl oder (Wert, Fehler) oder (Wert, Fehler, Name) erwartet, "
+            f"nicht {spec!r}."
+        )
+    value, sigma, *name = spec
+    if sigma is not None and sigma < 0:
+        raise ValueError(f"{symbol}: der Fehler muss >= 0 sein, nicht {sigma}.")
+    if name and not isinstance(name[0], str):
+        raise ValueError(f"{symbol}: der Name muss Text sein, z. B. '{symbol} [V]'.")
+    return float(value), (float(sigma) if sigma else None), (name[0] if name else symbol)
+
+
+def propagate(formula: str | Callable, result: str = "f", **parameters) -> PropagationResult:
     """Value of `formula` and its uncertainty by Gaussian error propagation (uncorrelated).
 
-    `formula` is a text ("-R_2 * (U_1 / R_1 + U_2 / R_2)") or a function whose arguments are
-    the parameters. `values` gives the value of every parameter, the key may carry the unit
-    (`{"R_2 [Ohm]": 1e5}`); `sigmas` gives the uncertainty of the parameters that have one.
-    A parameter without an entry in `sigmas` (or with 0) counts as exact and is left out of
-    the propagation. `result` is the name and unit of the result, e.g. "U_a [V]".
+    `formula` is a function whose arguments are the parameters, or a text. Every parameter is
+    a keyword argument with the name of the function argument::
+
+        propagate(lambda R, U: U / R, "I [A]",
+                  R=(100, 1, "R [Ohm]"),     # (value, uncertainty, name with unit)
+                  U=(5.0, 0.01))             # without a name: "U", no unit
+
+    A number alone (`U=5.0`) or an uncertainty of None or 0 is an exact value; it is left out of
+    the propagation. `result` is the name and unit of the result, e.g. "U_a [V]". The names
+    `formula` and `result` cannot be parameter names.
     """
-    sigmas = sigmas or {}
     expression = _expression(formula)
     if callable(formula):
         arguments = set(function_variables(formula))
     else:
         arguments = {str(symbol) for symbol in expression.free_symbols}
-
-    names = {_symbol(key): key for key in values}
-    if len(names) != len(values):
-        raise ValueError(f"Zwei Parameter heißen gleich: {sorted(values)}")
-    if missing := arguments - set(names):
-        raise ValueError(f"Zu {sorted(missing)} fehlt der Wert. Angegeben: {sorted(names)}")
-    if unused := set(names) - arguments:
+    if missing := arguments - set(parameters):
+        example = f"{sorted(missing)[0]}=(Wert, Fehler)"
+        raise ValueError(f"Zu {sorted(missing)} fehlt ein Parameter, z. B. {example}.")
+    if unused := set(parameters) - arguments:
         raise ValueError(f"{sorted(unused)} kommt in der Formel nicht vor ({sorted(arguments)}).")
-    sigma_of = {_symbol(key): float(sigma) for key, sigma in sigmas.items()}
-    if unknown := set(sigma_of) - set(names):
-        raise ValueError(f"Unsicherheit für {sorted(unknown)}, das es nicht als Parameter gibt.")
-    if any(s < 0 for s in sigma_of.values()):
-        raise ValueError("Unsicherheiten müssen >= 0 sein.")
 
-    point = {symbol: float(values[key]) for symbol, key in names.items()}
-    parameters = []
+    specs = {symbol: _parameter(symbol, spec) for symbol, spec in parameters.items()}
+    point = {symbol: value for symbol, (value, _, _) in specs.items()}
+    parameter_list = []
     derivatives = {}
-    for symbol in names:  # in the order of `values`
+    for symbol, (value, sigma, name) in specs.items():  # in the order of the call
         derivative = sympy.diff(expression, sympy.Symbol(symbol))
-        sigma = sigma_of.get(symbol) or None  # 0 means exact
         if sigma is not None:
             derivatives[symbol] = derivative
         slope = float(evaluate(derivative, point))
-        parameters.append(Parameter(names[symbol], symbol, point[symbol], sigma, slope))
+        parameter_list.append(Parameter(name, symbol, value, sigma, slope))
     if not derivatives:
-        raise ValueError("Mindestens ein Parameter braucht eine Unsicherheit (sigmas).")
+        raise ValueError("Mindestens ein Parameter braucht einen Fehler: R=(Wert, Fehler).")
 
-    variance = sum(p.contribution**2 for p in parameters if p.sigma is not None)
+    variance = sum(p.contribution**2 for p in parameter_list if p.sigma is not None)
     return PropagationResult(
         result,
         float(evaluate(expression, point)),
         float(variance**0.5),
-        parameters,
+        parameter_list,
         expression,
         derivatives,
     )
