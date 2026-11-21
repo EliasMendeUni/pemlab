@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.figure import Figure
 
 from pemlab.artifacts import Artifact
@@ -40,6 +41,18 @@ class Regression:
     data: PlotData
     result: FitResult
     numbers: NumberStyle | None = None
+    fit_mask: np.ndarray | None = None  # the points of `data` that were fitted (None: all)
+
+    @property
+    def fit_x(self) -> np.ndarray:
+        """x of the fitted points."""
+        x = self.data.x[1]
+        return x if self.fit_mask is None else x[self.fit_mask]
+
+    @property
+    def fitted_part(self) -> bool:
+        """True if only some of the points were fitted."""
+        return self.fit_mask is not None and not bool(self.fit_mask.all())
 
 
 @dataclass
@@ -57,7 +70,11 @@ def _fit_section(regression: Regression, numbers: NumberStyle | None) -> str:
         fit_expression_latex(function, column_latex(data.x[0])),
         fit_expression_text(function, column_symbol(data.x[0])),
     )
-    return fit_result_to_tex(regression.result, formula_tex, numbers)
+    tex = fit_result_to_tex(regression.result, formula_tex, numbers)
+    if regression.fitted_part:
+        used, total = int(regression.fit_mask.sum()), len(regression.fit_mask)
+        tex += f"\n\\par\\smallskip\n{used} of {total} points used for the fit."
+    return tex
 
 
 class Visualize:
@@ -141,7 +158,7 @@ class Visualize:
             elif isinstance(item, Regression):
                 layers.append(PointsLayer(item.data, points))
                 label = style.label or fit_label(item.data, item.function, item.result)
-                x_values = item.data.x[1]
+                x_values = item.fit_x  # the curve covers the fitted range
                 layers.append(
                     CurveLayer(
                         lambda xs, r=item: r.function(xs, *r.result.values),

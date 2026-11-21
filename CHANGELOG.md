@@ -33,6 +33,9 @@
   (optional, x error bars are drawn too)
 - `Analysis.make_PlotData(..., x_range=(low, high), y_range=(low, high))` selects the points of a plot or
   fit by intervals (`None` = open side)
+- `Analysis.make_regression(..., x_range=, y_range=)` and `Analysis.regression(...)` fit only the points in
+  the range while the plot shows all points; the curve covers the fitted range and the report names
+  the number of fitted points
 - `Project.Visualize(name)`: any number of data sets, fits (`Analysis.make_regression`) and functions
   in one plot
 

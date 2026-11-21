@@ -226,6 +226,17 @@ top = analysis.make_PlotData(F, A_DB, y_range=(-3, None))      # only points abo
 An error bar column (`y_sigma`) is cut along with the points. If no point is left, you get an
 error.
 
+`make_PlotData(..., x_range=...)` removes the other points from the plot as well. To **fit** only a
+part and still **show all points**, give the range to the regression instead:
+
+```python
+data = analysis.make_PlotData(F, A_DB)                                 # all points are plotted
+fit = analysis.make_regression(line, data, x_range=(100, 400))         # only 100 ... 400 Hz is fitted
+```
+
+The fit curve is drawn over the fitted range, and the report says how many points were used.
+`regression(...)` takes `x_range` and `y_range` too.
+
 - {meth}`~pemlab.Analysis.plot_data` plots only the measured points.
 - {meth}`~pemlab.Analysis.regression` fits a function and plots data and fit.
 
