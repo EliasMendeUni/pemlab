@@ -23,18 +23,24 @@ class PointStyle:
     capsize: float = 1.0
     errorbar_linewidth: float = 0.8
 
-    # Fit plots only: color the fitted points by their normalized residual r = (y - f(x)) / sigma
-    # (shape and size stay as set above; points outside the fit range are grey). The color is
-    # log10|r|, clipped to [residual_vmin, residual_vmax]; residual_vmax None: the largest |r|.
+    # Fit plots only: color the fitted points by |r|, their normalized residual
+    # r = (y - f(x)) / sigma (shape and size stay as set above; points outside the fit range are
+    # grey). The colors are clipped to [residual_vmin, residual_vmax]. Linear scale by default
+    # (vmin 0); residual_log=True: log scale (vmin 1) to also tell apart large outliers.
+    # residual_vmax None: the largest |r| of the fitted points.
     color_by_residual: bool = False
     residual_cmap: str = "plasma"
-    residual_vmin: float = 1.0  # |r| up to here all get the first color of the map
+    residual_log: bool = False
+    residual_vmin: float | None = None  # None: 0 (linear) or 1 (log)
     residual_vmax: float | None = None
 
     def __post_init__(self) -> None:
-        if self.residual_vmin <= 0:
-            raise ValueError(f"residual_vmin muss > 0 sein, nicht {self.residual_vmin}")
-        if self.residual_vmax is not None and self.residual_vmax <= self.residual_vmin:
+        if self.residual_vmin is not None and self.residual_vmin < 0:
+            raise ValueError(f"residual_vmin muss >= 0 sein, nicht {self.residual_vmin}")
+        if self.residual_log and self.residual_vmin is not None and self.residual_vmin <= 0:
+            raise ValueError("Bei residual_log=True muss residual_vmin > 0 sein")
+        vmin = self.residual_vmin if self.residual_vmin is not None else 0.0
+        if self.residual_vmax is not None and self.residual_vmax <= vmin:
             raise ValueError("residual_vmax muss größer als residual_vmin sein")
         if self.marker_size <= 0:
             raise ValueError(f"marker_size muss > 0 sein, nicht {self.marker_size}")

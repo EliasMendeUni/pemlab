@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, Normalize
 from matplotlib.figure import Figure
 
 from pemlab.data import PlotData
@@ -47,10 +47,13 @@ def _draw_residual_points(
     fitted = np.isfinite(residuals)
     size = np.abs(residuals)
     vmin = points.residual_vmin
+    if vmin is None:
+        vmin = 1.0 if points.residual_log else 0.0
     vmax = points.residual_vmax
     if vmax is None:
-        vmax = max(float(size[fitted].max()), 2 * vmin)  # the largest |r| of the fitted points
-    norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
+        # the largest |r| of the fitted points (at least a bit above vmin)
+        vmax = max(float(size[fitted].max()), 2 * vmin if vmin > 0 else 1.0)
+    norm = (LogNorm if points.residual_log else Normalize)(vmin=vmin, vmax=vmax, clip=True)
     cmap = plt.get_cmap(points.residual_cmap)
 
     if data.y_sigma is not None or data.x_sigma is not None:

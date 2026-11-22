@@ -4,7 +4,7 @@
 
 ### Added
 - `PointStyle(color_by_residual=True)`: in fit plots every point is colored by its normalized residual
-  `(y - f(x)) / sigma` (log scale of `|r|`, clipped to `residual_vmin` ... `residual_vmax`, default: the largest
+  `(y - f(x)) / sigma` (linear by default, `residual_log=True` for a log scale; clipped to `residual_vmin` ... `residual_vmax`, default: the largest
   `|r|`; triangle up/down for the sign; colormap `residual_cmap`). New: `pemlab.fit.normalized_residuals`
 
 ### Changed
