@@ -77,3 +77,27 @@ def test_a_point_without_any_uncertainty_is_reported():
     x = np.linspace(0, 4, 5)
     with pytest.raises(ValueError, match="Unsicherheit 0"):
         fit_function(straight, x, 2 * x, x_sigma=np.zeros(5), p0=[1, 0])
+
+
+# --- normalized residuals ---
+def test_normalized_residuals_sum_to_chi_squared():
+    from pemlab.fit import fit_function, normalized_residuals
+
+    x = np.linspace(0, 1, 20)
+    y = 2.0 * x + 0.01 * np.sin(40 * x)
+    y_sigma = np.full_like(x, 0.01)
+    x_sigma = np.full_like(x, 0.005)
+
+    def line(x, a):
+        return a * x
+
+    result = fit_function(line, x, y, y_sigma, [1.0], x_sigma)
+    r = normalized_residuals(line, x, y, y_sigma, x_sigma, result.values)
+    assert np.sum(r**2) == pytest.approx(result.chi2)
+
+
+def test_normalized_residuals_need_an_uncertainty():
+    from pemlab.fit import normalized_residuals
+
+    with pytest.raises(ValueError, match="Unsicherheiten"):
+        normalized_residuals(lambda x, a: a * x, np.arange(3.0), np.arange(3.0), None, None, [1.0])

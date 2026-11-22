@@ -6,10 +6,12 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
 
 from pemlab.data import PlotData
-from pemlab.fit import FitResult
+from pemlab.fit import FitResult, normalized_residuals
 from pemlab.formulas import fit_expression_text, normalize_unit, split_unit
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
 
@@ -20,6 +22,7 @@ class PointsLayer:
 
     data: PlotData
     points: PointStyle
+    residuals: np.ndarray | None = None  # normalized residuals of a fit, for color_by_residual
 
 
 @dataclass
@@ -32,7 +35,57 @@ class CurveLayer:
     x_range: tuple[float, float] | None = None
 
 
-def _draw_measurements(ax: Axes, data: PlotData, points: PointStyle) -> None:
+def _draw_residual_points(
+    ax: Axes, data: PlotData, points: PointStyle, residuals: np.ndarray
+) -> None:
+    """Points colored by log10|r| (clipped), triangle up for r > 0 and down for r < 0."""
+    _, x = data.x
+    _, y = data.y
+    size = np.abs(residuals)
+    vmin = points.residual_vmin
+    vmax = points.residual_vmax
+    if vmax is None:
+        vmax = max(float(size.max()), 2 * vmin)  # the largest |r| of the data
+    norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
+    cmap = plt.get_cmap(points.residual_cmap)
+
+    if data.y_sigma is not None or data.x_sigma is not None:
+        ax.errorbar(
+            x,
+            y,
+            yerr=None if data.y_sigma is None else data.y_sigma[1],
+            xerr=None if data.x_sigma is None else data.x_sigma[1],
+            fmt="none",
+            ecolor="0.6",
+            capsize=points.capsize,
+            elinewidth=points.errorbar_linewidth,
+            zorder=1,
+        )
+    for marker, mask in (("^", residuals >= 0), ("v", residuals < 0)):
+        if mask.any():
+            ax.scatter(
+                x[mask],
+                y[mask],
+                c=size[mask],
+                cmap=cmap,
+                norm=norm,
+                marker=marker,
+                s=(3 * points.marker_size) ** 2,  # scatter takes the area in points^2
+                alpha=points.marker_alpha,
+                zorder=2,
+            )
+    if points.label is not None:  # a legend entry without the color scale
+        ax.plot([], [], linestyle="none", marker="o", color=cmap(0.5), label=points.label)
+    colorbar = ax.figure.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+    colorbar.set_label(r"$|y - f(x)|/\sigma$ ($\blacktriangle$: $>0$, $\blacktriangledown$: $<0$)")
+
+
+def _draw_measurements(
+    ax: Axes, data: PlotData, points: PointStyle, residuals: np.ndarray | None = None
+) -> None:
+    if residuals is not None and points.color_by_residual:
+        _draw_residual_points(ax, data, points, residuals)
+        return
     _, x = data.x
     _, y = data.y
     options = {
@@ -142,7 +195,7 @@ def make_figure(
         fig, ax = plt.subplots(figsize=layout.figsize, layout="constrained")
         for layer in layers:
             if isinstance(layer, PointsLayer):
-                _draw_measurements(ax, layer.data, layer.points)
+                _draw_measurements(ax, layer.data, layer.points, layer.residuals)
             else:
                 _draw_curve(ax, layer, x_range, layout.xscale == "log")
         y_label = ", ".join(name_to_mathtext(name) for name in y_names)
@@ -175,8 +228,17 @@ def make_fit_figure(
             f"Fit: {quantity_to_mathtext(data.y[0])} = {formula_text}\n{result.parameters_text()}"
         )
     x = data.x[1]
+    points = points or PointStyle()
+    residuals = None
+    if points.color_by_residual:
+        residuals = normalized_residuals(
+            function, x, data.y[1],
+            None if data.y_sigma is None else data.y_sigma[1],
+            None if data.x_sigma is None else data.x_sigma[1],
+            result.values,
+        )
     layers = [
-        PointsLayer(data, points or PointStyle()),
+        PointsLayer(data, points, residuals),
         CurveLayer(
             lambda xs: function(xs, *result.values), fit, label, (float(x.min()), float(x.max()))
         ),

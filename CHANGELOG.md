@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- `PointStyle(color_by_residual=True)`: in fit plots every point is colored by its normalized residual
+  `(y - f(x)) / sigma` (log scale of `|r|`, clipped to `residual_vmin` ... `residual_vmax`, default: the largest
+  `|r|`; triangle up/down for the sign; colormap `residual_cmap`). New: `pemlab.fit.normalized_residuals`
+
 ### Changed
 - `pemlab_instruments`: saved files get date and time in the name (`hp.csv` becomes
   `hp_2026-11-10_14-30-05.csv`), so a repeated measurement never overwrites an earlier file

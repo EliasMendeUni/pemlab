@@ -23,7 +23,19 @@ class PointStyle:
     capsize: float = 1.0
     errorbar_linewidth: float = 0.8
 
+    # Fit plots only: color every point by its normalized residual r = (y - f(x)) / sigma.
+    # The color is log10|r|, clipped to [residual_vmin, residual_vmax]; a triangle up means
+    # r > 0, down r < 0. residual_vmax None: the largest |r| of the data.
+    color_by_residual: bool = False
+    residual_cmap: str = "plasma"
+    residual_vmin: float = 1.0  # |r| up to here all get the first color of the map
+    residual_vmax: float | None = None
+
     def __post_init__(self) -> None:
+        if self.residual_vmin <= 0:
+            raise ValueError(f"residual_vmin muss > 0 sein, nicht {self.residual_vmin}")
+        if self.residual_vmax is not None and self.residual_vmax <= self.residual_vmin:
+            raise ValueError("residual_vmax muss größer als residual_vmin sein")
         if self.marker_size <= 0:
             raise ValueError(f"marker_size muss > 0 sein, nicht {self.marker_size}")
         if not 0 <= self.marker_alpha <= 1:

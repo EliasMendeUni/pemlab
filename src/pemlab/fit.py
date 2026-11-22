@@ -66,6 +66,27 @@ def _effective_sigma(function, x, values, y_sigma, x_sigma) -> np.ndarray:
     return sigma
 
 
+def normalized_residuals(function, x, y, y_sigma, x_sigma, values) -> np.ndarray:
+    """(y - f(x)) / sigma at every point; chi-squared is the sum of their squares.
+
+    sigma is `y_sigma`, or with `x_sigma` the effective sigma of the fit
+    (sqrt(sigma_y^2 + (f'(x) sigma_x)^2)). Without any uncertainty there is nothing to
+    normalize with, so this raises a ValueError.
+    """
+    if y_sigma is None and x_sigma is None:
+        raise ValueError(
+            "Normierte Residuen brauchen Unsicherheiten (y_sigma oder x_sigma) in den Daten."
+        )
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    y_sigma = None if y_sigma is None else np.asarray(y_sigma, dtype=float)
+    if x_sigma is None:
+        sigma = y_sigma
+    else:
+        sigma = _effective_sigma(function, x, values, y_sigma, np.asarray(x_sigma, dtype=float))
+    model = np.broadcast_to(function(x, *values), x.shape)  # a constant gives a scalar
+    return (y - model) / sigma
+
+
 def fit_function(function, x, y, y_sigma=None, p0=None, x_sigma=None) -> FitResult:
     """Least-squares fit of `function(x, *parameters)`.
 

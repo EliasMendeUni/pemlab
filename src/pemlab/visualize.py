@@ -11,7 +11,7 @@ from matplotlib.figure import Figure
 from pemlab.artifacts import Artifact
 from pemlab.calculation import Calculation
 from pemlab.data import PlotData
-from pemlab.fit import FitResult
+from pemlab.fit import FitResult, normalized_residuals
 from pemlab.formulas import column_symbol, fit_expression_latex, fit_expression_text
 from pemlab.latex import (
     calculations_section_to_tex,
@@ -139,7 +139,16 @@ class Visualize:
             if isinstance(item, PlotData):
                 layers.append(PointsLayer(item, points))
             elif isinstance(item, Regression):
-                layers.append(PointsLayer(item.data, points))
+                residuals = None
+                if points.color_by_residual:
+                    data = item.data
+                    residuals = normalized_residuals(
+                        item.function, data.x[1], data.y[1],
+                        None if data.y_sigma is None else data.y_sigma[1],
+                        None if data.x_sigma is None else data.x_sigma[1],
+                        item.result.values,
+                    )
+                layers.append(PointsLayer(item.data, points, residuals))
                 label = style.label or fit_label(item.data, item.function, item.result)
                 x_values = item.data.x[1]
                 layers.append(
