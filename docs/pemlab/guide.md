@@ -162,6 +162,37 @@ The propagation assumes **independent** uncertainties. A quantity that appears s
 a formula is treated as one quantity.
 ```
 
+### Uncertainty of a single value
+
+`lab.propagate` is `add_uncertainty` for **one** result, e.g. a gain computed from resistors. Every
+parameter is a keyword argument named like the argument of the function, with its value,
+uncertainty and name:
+
+```python
+lab.propagate(
+    "adder",
+    lambda R_2, R_11, R_12, U_e1, U_e2: -R_2 * (U_e1 / R_11 + U_e2 / R_12),
+    R_2=(1e5, 1e3, "R_2 [Ohm]"),      # (value, uncertainty, name with unit)
+    R_11=(1e4, 100, "R_11 [Ohm]"),
+    R_12=(1e4, 100, "R_12 [Ohm]"),
+    U_e1=(1.234, 4e-4, "U_e1 [V]"),
+    U_e2=(0.5, None, "U_e2 [V]"),     # no uncertainty: exact, left out of the propagation
+    result="U_a [V]",
+    show=True,
+)
+```
+
+The name is optional (default: the argument name, without unit), and a plain number (`U_e2=0.5`)
+is an exact value as well. Only parameters with an uncertainty are propagated. The names `name`,
+`formula`, `result`, `show` and `numbers` cannot be parameter names. The call prints the result and the share every parameter has in the uncertainty, returns it as a
+`PropagationResult` (`.value`, `.error`, `.parameters`), and `build()` writes
+`propagations/adder/adder.tex`: the parameters with their uncertainties and the result as
+$U_a = (-17.34 \pm 0.22)\,\mathrm{V}$. `show=True` adds the formula, the partial derivatives and
+the sum of the contributions. Put it into the report with
+`\input{<build folder>/propagations/adder/adder.tex}`; it is display math and a table, not a
+float. Without a project, `pemlab.propagate(formula, result, **parameters)` gives the same
+`PropagationResult`.
+
 ## Plots and regression
 
 {meth}`~pemlab.Analysis.make_PlotData` selects columns by their full name:
@@ -194,6 +225,17 @@ top = analysis.make_PlotData(F, A_DB, y_range=(-3, None))      # only points abo
 
 An error bar column (`y_sigma`) is cut along with the points. If no point is left, you get an
 error.
+
+`make_PlotData(..., x_range=...)` removes the other points from the plot as well. To **fit** only a
+part and still **show all points**, give the range to the regression instead:
+
+```python
+data = analysis.make_PlotData(F, A_DB)                                 # all points are plotted
+fit = analysis.make_regression(line, data, x_range=(100, 400))         # only 100 ... 400 Hz is fitted
+```
+
+The fit curve is drawn over the fitted range, and the report says how many points were used.
+`regression(...)` takes `x_range` and `y_range` too.
 
 - {meth}`~pemlab.Analysis.plot_data` plots only the measured points.
 - {meth}`~pemlab.Analysis.regression` fits a function and plots data and fit.

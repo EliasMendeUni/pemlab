@@ -26,12 +26,21 @@
 - Documentation in two parts, examples are workflow notebooks
 
 ### Added
+- `Project.propagate(name, formula, result, show, **parameters)` and `pemlab.propagate`: Gaussian
+  error propagation of a single value. Every parameter is a keyword argument named like the
+  function argument, `R=(value, uncertainty, name)` (a number alone is exact). Only parameters
+  with an uncertainty are propagated, the result is printed (with the share of every parameter), returned as `PropagationResult` and written
+  to `build/propagations/<name>/<name>.tex` (parameters, result as `\SI{... +- ...}{unit}`, with
+  `show=True` also formula, partial derivatives and contributions)
 - `add_uncertainty`: an uncertainty in `sigmas` can be a function of the columns (e.g. the accuracy
   of a multimeter from the reading)
 - Fits can include the uncertainty of x: `make_PlotData(x, y, y_sigma, x_sigma)`, effective variance method
   (optional, x error bars are drawn too)
 - `Analysis.make_PlotData(..., x_range=(low, high), y_range=(low, high))` selects the points of a plot or
   fit by intervals (`None` = open side)
+- `Analysis.make_regression(..., x_range=, y_range=)` and `Analysis.regression(...)` fit only the points in
+  the range while the plot shows all points; the curve covers the fitted range and the report names
+  the number of fitted points
 - `Project.Visualize(name)`: any number of data sets, fits (`Analysis.make_regression`) and functions
   in one plot
 

@@ -266,6 +266,54 @@ def test_the_fit_uses_only_the_selected_range(ramp):
     assert len(regression.data.x[1]) == 5
 
 
+@pytest.fixture
+def bent(tmp_path):
+    """A straight line y = 2x that jumps up by 10 from x = 6 on."""
+    x = np.arange(10.0)
+    frame = pd.DataFrame({"x [m]": x, "y [m]": 2 * x + 10 * (x >= 6), "s [m]": 0.1})
+    frame.to_csv(tmp_path / "bent.csv", index=False)
+    return Project(tmp_path / "build").analysis(tmp_path / "bent.csv")
+
+
+def test_the_fit_range_fits_part_of_the_points_but_the_plot_shows_all(bent):
+    data = bent.make_PlotData("x [m]", "y [m]", "s [m]")
+    regression = bent.make_regression(straight, data, x_range=(0, 5))
+    assert regression.result.values == pytest.approx([2.0, 0.0], abs=1e-9)
+    assert len(regression.data.x[1]) == 10  # all points stay in the plot
+    assert regression.result.dof == 4  # 6 fitted points, 2 parameters
+    assert regression.fitted_part
+
+    whole = bent.make_regression(straight, data)
+    assert not whole.fitted_part
+    assert whole.result.values[1] != pytest.approx(0.0, abs=1e-3)
+
+
+def test_y_range_also_selects_the_fitted_points(bent):
+    data = bent.make_PlotData("x [m]", "y [m]")
+    regression = bent.make_regression(straight, data, y_range=(None, 10))
+    assert list(regression.fit_x) == [0, 1, 2, 3, 4, 5]
+
+
+def test_the_fit_curve_covers_only_the_fitted_range(bent):
+    data = bent.make_PlotData("x [m]", "y [m]")
+    plot = bent.visualize("p").add(bent.make_regression(straight, data, x_range=(1, 4)))
+    points, curve = plot.layers()
+    assert len(points.data.x[1]) == 10
+    assert curve.x_range == (1.0, 4.0)
+
+
+def test_the_report_says_how_many_points_were_fitted(bent):
+    data = bent.make_PlotData("x [m]", "y [m]")
+    plot = bent.visualize("p").add(bent.make_regression(straight, data, x_range=(0, 5)))
+    assert "6 of 10 points used for the fit." in plot._notes()[0]
+
+
+def test_too_few_points_in_the_fit_range_are_refused(bent):
+    data = bent.make_PlotData("x [m]", "y [m]")
+    with pytest.raises(ValueError, match="mindestens 2"):
+        bent.make_regression(straight, data, x_range=(3, 3))
+
+
 # --- x uncertainty in plots and regressions ---
 
 

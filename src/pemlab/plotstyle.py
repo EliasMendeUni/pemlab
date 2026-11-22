@@ -13,7 +13,7 @@ class PointStyle:
     """Measured points and their error bars."""
 
     marker: str = "o"
-    marker_size: float = 1.0  # in points
+    marker_size: float = 1.5  # in points
     marker_color: str | None = None
     marker_alpha: float = 1.0  # < 1 helps with many overlapping points
     connect_points: bool = False  # draw a line between the points
@@ -47,7 +47,7 @@ class FitStyle:
     """The fit curve (only used by plots with a fit)."""
 
     color: str | None = None
-    linewidth: float = 1
+    linewidth: float = 1.2
     linestyle: str = "-"
     points: int = 200  # resolution of the curve
     label: str | None = None  # None: formula and parameters

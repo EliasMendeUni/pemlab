@@ -8,8 +8,9 @@ import re
 
 from pemlab.calculation import Calculation
 from pemlab.fit import FitResult
-from pemlab.formulas import column_symbol, normalize_unit, split_unit, symbol_latex
+from pemlab.formulas import column_symbol, normalize_unit, split_unit, symbol_latex, to_latex
 from pemlab.numberstyle import NumberStyle
+from pemlab.propagation import PropagationResult
 from pemlab.stats import MeanResult
 
 _ESCAPES = {
@@ -245,6 +246,91 @@ def mean_result_to_tex(
     rows = _mean_rows(result, column, numbers or NumberStyle())
     body = [f"{row_label} & {value} \\\\" for row_label, value in rows]
     return _table_float("quantity & value", body, "lr", caption, label, notes)
+
+
+def _value_error_to_tex(value: str, error: str, unit: str | None) -> str:
+    r"""'2.848e-9' and '0.0037e-9' -> \SI[uncertainty-mode=separate]{2.848 +- 0.0037 e-9}{V}.
+
+    siunitx takes the exponent once, behind the uncertainty. The option makes it show a +-
+    whatever the document sets.
+    """
+    mantissa, _, exponent = value.partition("e")
+    number = f"{mantissa} +- {error.partition('e')[0]}" + (f" e{exponent}" if exponent else "")
+    option = "[uncertainty-mode=separate]"
+    if unit is None:
+        return rf"\num{option}{{{number}}}"
+    return rf"\SI{option}{{{number}}}{{{_siunitx_unit(unit)}}}"
+
+
+def _parameter_table_to_tex(result: PropagationResult, numbers: NumberStyle) -> str:
+    rows = []
+    for p in result.parameters:
+        value = number_with_unit_to_tex(numbers.number(p.value), p.unit)
+        sigma = "--"
+        if p.sigma is not None:
+            sigma = number_with_unit_to_tex(numbers.number(p.sigma, numbers.error_digits), p.unit)
+        rows.append(rf"    ${column_latex(p.name)}$ & {value} & {sigma} \\")
+    return "\n".join([
+        r"\begin{center}",
+        r"  \begin{tabular}{@{}lrr@{}}",
+        r"    \toprule",
+        r"    parameter & value & uncertainty \\",
+        r"    \midrule",
+        *rows,
+        r"    \bottomrule",
+        r"  \end{tabular}",
+        r"\end{center}",
+    ])
+
+
+def _propagation_steps_to_tex(
+    result: PropagationResult, names: dict[str, str], left: str, numbers: NumberStyle
+) -> list[str]:
+    """The formula, the derivatives and the sum of the contributions, as display math."""
+    derivatives = [
+        rf"\frac{{\partial {left}}}{{\partial {names[p.symbol]}}} &= "
+        rf"{to_latex(result.derivatives[p.symbol], names)} = \num{{{numbers.number(p.derivative)}}}"
+        for p in result.uncertain_parameters
+    ]
+    contributions = [
+        number_with_unit_to_tex(numbers.number(p.contribution, 3), result.unit)
+        for p in result.uncertain_parameters
+    ]
+    terms = [rf"\left({contribution}\right)^{{2}}" for contribution in contributions]
+    break_line = " \\\\\n  "  # LaTeX line break inside aligned
+    pairs = [" + ".join(terms[i : i + 2]) for i in range(0, len(terms), 2)]
+    variance = (break_line + r"&\quad + ").join(pairs)
+    error = number_with_unit_to_tex(numbers.number(result.error, numbers.error_digits), result.unit)
+    sigma = rf"\sigma_{{{left}}}"
+    return [
+        rf"\[ {left} = {to_latex(result.expression, names)} \]",
+        rf"\[ {sigma} = \sqrt{{\sum_i \left(\frac{{\partial {left}}}{{\partial x_i}}"
+        r"\,\sigma_{x_i}\right)^{2}} \]",
+        "\\[\n\\begin{aligned}\n  " + break_line.join(derivatives) + "\n\\end{aligned}\n\\]",
+        "\\[\n\\begin{aligned}\n"
+        f"  {sigma}^{{2}} &= {variance}{break_line}{sigma} &= {error}\n"
+        "\\end{aligned}\n\\]",
+    ]
+
+
+def propagation_to_tex(
+    result: PropagationResult, show: bool = False, numbers: NumberStyle | None = None
+) -> str:
+    r"""Parameters with their uncertainties and the result; `show` adds the calculation.
+
+    Display math and a centered table, no float: \input it where the result belongs.
+    """
+    numbers = numbers or NumberStyle()
+    left = column_latex(result.result)
+    names = {p.symbol: column_latex(p.name) for p in result.parameters}
+    value, error = result.formatted(numbers)
+    final = rf"\[ {left} = {_value_error_to_tex(value, error, result.unit)} \]"
+    parts = _propagation_steps_to_tex(result, names, left, numbers) if show else []
+    if show:
+        parts.insert(1, _parameter_table_to_tex(result, numbers))
+    else:
+        parts.append(_parameter_table_to_tex(result, numbers))
+    return "\n".join([*parts, final]) + "\n"
 
 
 def figure_float_to_tex(image_file: str, caption: str, label: str, notes: list[str]) -> str:

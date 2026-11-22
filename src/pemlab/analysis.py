@@ -8,7 +8,7 @@ import numpy as np
 from pemlab.artifacts import Artifact, MeanArtifact
 from pemlab.calculation import collect_calculations
 from pemlab.data import EditCsv, PlotData
-from pemlab.fit import FitResult, fit_function
+from pemlab.fit import FitResult, fit_function, parameter_names
 from pemlab.latex import calculations_section_to_tex, mean_result_to_tex, name_to_tex
 from pemlab.numberstyle import NumberStyle
 from pemlab.plotstyle import FitStyle, LayoutStyle, PointStyle
@@ -103,7 +103,13 @@ class Analysis:
         return data
 
     def make_regression(
-        self, function, data: PlotData, p0=None, numbers: NumberStyle | None = None
+        self,
+        function,
+        data: PlotData,
+        p0=None,
+        numbers: NumberStyle | None = None,
+        x_range: tuple[float | None, float | None] | None = None,
+        y_range: tuple[float | None, float | None] | None = None,
     ) -> Regression:
         """Fit `function(x, *parameters)` to the data; `plot.add(regression)` draws it.
 
@@ -113,13 +119,30 @@ class Analysis:
         `x_sigma` is included by the effective variance method (every point gets
         sigma^2 = sigma_y^2 + (f'(x) sigma_x)^2, iterated), so the errors of the parameters
         contain the uncertainty of x as well. Without any uncertainty the fit is unweighted.
+
+        `x_range` and `y_range` (intervals `(low, high)`, `None` = open side, as in
+        `make_PlotData`) select the points that are fitted. The plot still shows **all** points of
+        `data`; the fit curve is drawn over the fitted range:
+        `make_regression(line, data, x_range=(100, 400))`.
         """
         numbers = numbers or self.numbers
-        y_sigma = None if data.y_sigma is None else data.y_sigma[1]
-        x_sigma = None if data.x_sigma is None else data.x_sigma[1]
-        result = fit_function(function, data.x[1], data.y[1], y_sigma, p0, x_sigma)
+        keep = _in_range(data.x[1], x_range, "x_range") & _in_range(data.y[1], y_range, "y_range")
+        needed = len(parameter_names(function))
+        if keep.sum() < needed:
+            raise ValueError(
+                f"{int(keep.sum())} Punkte im Fit-Bereich (x_range={x_range}, y_range={y_range}), "
+                f"der Fit braucht mindestens {needed}."
+            )
+
+        def selected(sigma: tuple[str, np.ndarray] | None):
+            return None if sigma is None else sigma[1][keep]
+
+        result = fit_function(
+            function, data.x[1][keep], data.y[1][keep], selected(data.y_sigma), p0,
+            selected(data.x_sigma),
+        )
         print(result.summary(numbers))
-        return Regression(function, data, result, numbers)
+        return Regression(function, data, result, numbers, keep)
 
     def visualize(self, name: str, caption: str | None = None, layout: LayoutStyle | None = None):
         """An empty `Visualize` plot with the styles of this analysis, written by `build()`."""
@@ -150,9 +173,15 @@ class Analysis:
         fit: FitStyle | None = None,
         layout: LayoutStyle | None = None,
         numbers: NumberStyle | None = None,
+        x_range: tuple[float | None, float | None] | None = None,
+        y_range: tuple[float | None, float | None] | None = None,
     ) -> FitResult:
-        """Fit `function(x, *parameters)` to the data and add the plot with the results."""
-        regression = self.make_regression(function, data, p0, numbers)
+        """Fit `function(x, *parameters)` to the data and add the plot with the results.
+
+        `x_range` and `y_range` select the points that are fitted (see `make_regression`); the
+        plot shows all points.
+        """
+        regression = self.make_regression(function, data, p0, numbers, x_range, y_range)
         plot = self.visualize(name, caption, layout).add(regression, points=points, fit=fit)
         plot._preview()
         return regression.result
