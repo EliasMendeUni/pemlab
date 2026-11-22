@@ -38,14 +38,18 @@ class CurveLayer:
 def _draw_residual_points(
     ax: Axes, data: PlotData, points: PointStyle, residuals: np.ndarray
 ) -> None:
-    """Points colored by log10|r| (clipped), triangle up for r > 0 and down for r < 0."""
+    """Points of the fit colored by log10|r| (clipped); NaN residuals (not fitted) are grey.
+
+    The marker and its size are those of the PointStyle, the error bars are drawn for all points.
+    """
     _, x = data.x
     _, y = data.y
+    fitted = np.isfinite(residuals)
     size = np.abs(residuals)
     vmin = points.residual_vmin
     vmax = points.residual_vmax
     if vmax is None:
-        vmax = max(float(size.max()), 2 * vmin)  # the largest |r| of the data
+        vmax = max(float(size[fitted].max()), 2 * vmin)  # the largest |r| of the fitted points
     norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
     cmap = plt.get_cmap(points.residual_cmap)
 
@@ -56,28 +60,25 @@ def _draw_residual_points(
             yerr=None if data.y_sigma is None else data.y_sigma[1],
             xerr=None if data.x_sigma is None else data.x_sigma[1],
             fmt="none",
-            ecolor="0.6",
+            ecolor="0.4",
             capsize=points.capsize,
             elinewidth=points.errorbar_linewidth,
             zorder=1,
         )
-    for marker, mask in (("^", residuals >= 0), ("v", residuals < 0)):
-        if mask.any():
-            ax.scatter(
-                x[mask],
-                y[mask],
-                c=size[mask],
-                cmap=cmap,
-                norm=norm,
-                marker=marker,
-                s=(3 * points.marker_size) ** 2,  # scatter takes the area in points^2
-                alpha=points.marker_alpha,
-                zorder=2,
-            )
+    marker_area = points.marker_size**2  # scatter takes the area in points^2
+    if not fitted.all():  # points outside the fit range: no residual, neutral color
+        ax.scatter(
+            x[~fitted], y[~fitted], color="0.7", marker=points.marker, s=marker_area,
+            alpha=points.marker_alpha, zorder=2,
+        )
+    ax.scatter(
+        x[fitted], y[fitted], c=size[fitted], cmap=cmap, norm=norm, marker=points.marker,
+        s=marker_area, alpha=points.marker_alpha, zorder=3,
+    )
     if points.label is not None:  # a legend entry without the color scale
-        ax.plot([], [], linestyle="none", marker="o", color=cmap(0.5), label=points.label)
+        ax.plot([], [], linestyle="none", marker=points.marker, color=cmap(0.5), label=points.label)
     colorbar = ax.figure.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax)
-    colorbar.set_label(r"$|y - f(x)|/\sigma$ ($\blacktriangle$: $>0$, $\blacktriangledown$: $<0$)")
+    colorbar.set_label(r"$|y - f(x)|/\sigma$")
 
 
 def _draw_measurements(

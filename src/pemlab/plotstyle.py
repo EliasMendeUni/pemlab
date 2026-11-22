@@ -23,9 +23,9 @@ class PointStyle:
     capsize: float = 1.0
     errorbar_linewidth: float = 0.8
 
-    # Fit plots only: color every point by its normalized residual r = (y - f(x)) / sigma.
-    # The color is log10|r|, clipped to [residual_vmin, residual_vmax]; a triangle up means
-    # r > 0, down r < 0. residual_vmax None: the largest |r| of the data.
+    # Fit plots only: color the fitted points by their normalized residual r = (y - f(x)) / sigma
+    # (shape and size stay as set above; points outside the fit range are grey). The color is
+    # log10|r|, clipped to [residual_vmin, residual_vmax]; residual_vmax None: the largest |r|.
     color_by_residual: bool = False
     residual_cmap: str = "plasma"
     residual_vmin: float = 1.0  # |r| up to here all get the first color of the map

@@ -157,12 +157,14 @@ class Visualize:
                 layers.append(PointsLayer(item, points))
             elif isinstance(item, Regression):
                 residuals = None
-                if points.color_by_residual:
+                if points.color_by_residual:  # only the fitted points get a residual
                     data = item.data
-                    residuals = normalized_residuals(
-                        item.function, data.x[1], data.y[1],
-                        None if data.y_sigma is None else data.y_sigma[1],
-                        None if data.x_sigma is None else data.x_sigma[1],
+                    keep = np.ones(len(data.x[1]), bool) if item.fit_mask is None else item.fit_mask
+                    residuals = np.full(len(keep), np.nan)
+                    residuals[keep] = normalized_residuals(
+                        item.function, data.x[1][keep], data.y[1][keep],
+                        None if data.y_sigma is None else data.y_sigma[1][keep],
+                        None if data.x_sigma is None else data.x_sigma[1][keep],
                         item.result.values,
                     )
                 layers.append(PointsLayer(item.data, points, residuals))
